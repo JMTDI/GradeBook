@@ -1,3 +1,4 @@
+<!-- When you replace an image or GIF below, bump its ?v= number. VS Code's Markdown preview keeps showing the old picture while its URL is unchanged. -->
 <div align="center">
 
 <img src="assets/icons/icon-128.png" alt="GradeBook icon" width="96" height="96">
@@ -18,8 +19,8 @@ Weighted averages, letter grades and one-click backups, as a native app for Wind
 [Features](#features) · [Install](#install) · [Using the app](#using-the-app) · [Your data](#your-data) · [Build from source](#build-from-source)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
-  <img src="docs/demo-light.gif" alt="GradeBook in action: adding a score updates the averages, changing the weights in Settings updates them again, and the button in the corner switches between light and dark" width="760">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif?v=2">
+  <img src="docs/demo-light.gif?v=2" alt="GradeBook in action: a Homework, a Test and a Quiz grade are added in that order and the averages update, changing the weights in Settings updates them again, and the button in the corner switches between light and dark" width="760">
 </picture>
 
 </div>
@@ -69,8 +70,8 @@ bottom.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grades-dark.png">
-    <img src="docs/screenshots/grades.png" alt="The Grades screen: every student in a grade level with their scores, averages and letter grades" width="640">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grades-dark.png?v=2">
+    <img src="docs/screenshots/grades.png?v=2" alt="The Grades screen: every student in a grade level with their scores, averages and letter grades" width="640">
   </picture>
 </p>
 
@@ -83,8 +84,8 @@ confirm with the red **Delete** button.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
-    <img src="docs/screenshots/settings.png" alt="The Settings screen: add students, set the weights, and back up or restore" width="640">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png?v=2">
+    <img src="docs/screenshots/settings.png?v=2" alt="The Settings screen: add students, set the weights, and back up or restore" width="640">
   </picture>
 </p>
 
