@@ -15,14 +15,18 @@ Unicode true
     !error "Pass the version: makensis /DVERSION=x.y.z /DROOT=... installer.nsi"
 !endif
 ; An absolute path, so nothing depends on where makensis is started from.
+; Every path built from it separates its parts with backslashes. NSIS on Windows cuts a File
+; path into folder and file name at the last backslash and doesn't see "/" as a separator, so
+; "D:\build/target/gradebook.exe" matches no file there. makensis on Linux and macOS turns
+; backslashes into "/" by itself, so this builds the same everywhere.
 !ifndef ROOT
     !error "Pass the project folder: makensis /DVERSION=x.y.z /DROOT=... installer.nsi"
 !endif
 !ifndef EXE
-    !define EXE "${ROOT}/target/release/gradebook.exe"
+    !define EXE "${ROOT}\target\release\gradebook.exe"
 !endif
 !ifndef OUTFILE
-    !define OUTFILE "${ROOT}/dist/GradeBook-${VERSION}-windows-x64-setup.exe"
+    !define OUTFILE "${ROOT}\dist\GradeBook-${VERSION}-windows-x64-setup.exe"
 !endif
 
 !define NAME "GradeBook"
@@ -39,8 +43,8 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 BrandingText "${NAME} ${VERSION}"
 
-!define MUI_ICON "${ROOT}/assets/icons/icon.ico"
-!define MUI_UNICON "${ROOT}/assets/icons/icon.ico"
+!define MUI_ICON "${ROOT}\assets\icons\icon.ico"
+!define MUI_UNICON "${ROOT}\assets\icons\icon.ico"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\gradebook.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${NAME}"
@@ -55,7 +59,7 @@ BrandingText "${NAME} ${VERSION}"
 Section "Install"
     SetOutPath "$INSTDIR"
     File "/oname=gradebook.exe" "${EXE}"
-    File "${ROOT}/ui/fonts/Inter-OFL.txt"
+    File "${ROOT}\ui\fonts\Inter-OFL.txt"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
     CreateShortcut "$SMPROGRAMS\${NAME}.lnk" "$INSTDIR\gradebook.exe"

@@ -1,6 +1,6 @@
-//! The package id (`gradebook::APP_ID`) also names things in packaging files the compiler never
-//! sees. If one is left behind, the app still builds, but the Linux icon goes missing, the macOS
-//! bundle gets the wrong identifier, or the Windows uninstall entry ends up under another name.
+//! Checks on the packaging files, which the compiler never sees, so a mistake in one only shows
+//! when its installer is built: the package id (`gradebook::APP_ID`) must be the same in all of
+//! them, and the Windows installer script must spell its paths the way NSIS on Windows reads them.
 
 use std::fs;
 use std::path::Path;
@@ -63,4 +63,21 @@ fn the_package_id_is_the_same_in_every_packaging_file() {
         ),
         "installer.nsi APP_ID"
     );
+}
+
+#[test]
+fn the_windows_installer_script_spells_its_paths_with_backslashes() {
+    // NSIS on Windows finds the file name of a `File` path after the last backslash and ignores
+    // "/", so `${ROOT}/target/...` (ROOT is `D:\...` there) matches no file. makensis on Linux and
+    // macOS converts backslashes itself, so a slash builds fine there and only Windows fails.
+    let script = read("packaging/windows/installer.nsi");
+    for line in script.lines().filter(|line| !line.trim_start().starts_with(';')) {
+        // The text between each pair of double quotes.
+        for quoted in line.split('"').skip(1).step_by(2) {
+            assert!(
+                !(quoted.contains("${ROOT}") && quoted.contains('/')),
+                "installer.nsi builds a path from ${{ROOT}} with a forward slash: {line}"
+            );
+        }
+    }
 }
