@@ -6,6 +6,7 @@ pub mod book;
 pub mod calc;
 pub mod cli;
 pub mod model;
+pub mod prefs;
 pub mod store;
 pub mod ui;
 pub mod view;

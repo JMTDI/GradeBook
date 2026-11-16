@@ -163,3 +163,35 @@ export component MinusCircleIcon inherits Rectangle {
         background: #ffffff;
     }
 }
+
+// A sun with eight rays: the light/dark button shows it while the app is dark.
+export component SunIcon inherits Path {
+    in property <color> tint: Theme.accent;
+
+    width: 20px;
+    height: 20px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: 1.7px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 16.3 12 A 4.3 4.3 0 1 1 7.7 12 A 4.3 4.3 0 1 1 16.3 12 Z M 19.4 12 L 21.9 12 M 17.23 17.23 L 19 19 M 12 19.4 L 12 21.9 M 6.77 17.23 L 5 19 M 4.6 12 L 2.1 12 M 6.77 6.77 L 5 5 M 12 4.6 L 12 2.1 M 17.23 6.77 L 19 5";
+}
+
+// A crescent moon: the light/dark button shows it while the app is light.
+export component MoonIcon inherits Path {
+    in property <color> tint: Theme.accent;
+
+    width: 20px;
+    height: 20px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: 1.7px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 20.42 14.54 A 8.6 8.6 0 1 1 10.88 3.5 A 7.4 7.4 0 0 0 20.42 14.54 Z";
+}

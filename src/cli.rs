@@ -15,7 +15,7 @@ Options:
 
 Environment:
   GRADEBOOK_DATA_DIR  Keep the data in this folder instead (handy for a portable copy)
-  GRADEBOOK_THEME     'light' or 'dark' to override the system appearance";
+  GRADEBOOK_THEME     Start in 'light' or 'dark' instead of the saved or system appearance";
 
 /// The text to print for an informational flag in `args` (the arguments after the
 /// program name), or `None` if the app should just start. Unknown arguments are

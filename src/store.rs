@@ -1,4 +1,4 @@
-//! Persistence: the app's data file plus Backup/Restore files.
+//! Persistence: the app's data file, Backup/Restore files, and the preferences file.
 //!
 //! The data file uses the same JSON as a backup ([`BackupData`]). A file that can't be
 //! read is moved aside (never overwritten) and reported to the caller, rather than
@@ -10,9 +10,15 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::Serialize;
+
 use crate::model::BackupData;
+use crate::prefs::Preferences;
 
 pub const DATA_FILE: &str = "gradebook.json";
+
+/// The preferences (see [`Preferences`]), next to the data file.
+pub const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -107,6 +113,23 @@ impl Store {
         write_json_atomically(&self.path, data)
     }
 
+    /// The saved preferences. A missing or unreadable file just means the defaults:
+    /// preferences are never worth interrupting anyone for.
+    pub fn load_preferences(&self) -> Preferences {
+        fs::read(self.settings_path())
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_preferences(&self, preferences: &Preferences) -> Result<(), StoreError> {
+        write_json_atomically(&self.settings_path(), preferences)
+    }
+
+    fn settings_path(&self) -> PathBuf {
+        self.path.with_file_name(SETTINGS_FILE)
+    }
+
     /// Copies the current data file next to itself as `gradebook.before-restore-<time>.json`
     /// and returns the copy's path, or `None` if there is no data file yet. An earlier copy
     /// is never overwritten: restoring twice must not destroy the original data.
@@ -156,13 +179,13 @@ pub fn read_backup_file(path: &Path) -> Result<BackupData, StoreError> {
     Ok(serde_json::from_slice(&bytes)?)
 }
 
-fn write_json_atomically(path: &Path, data: &BackupData) -> Result<(), StoreError> {
+fn write_json_atomically<T: Serialize>(path: &Path, value: &T) -> Result<(), StoreError> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
             fs::create_dir_all(dir)?;
         }
     }
-    let json = serde_json::to_vec_pretty(data)?;
+    let json = serde_json::to_vec_pretty(value)?;
     let mut tmp_name = path.file_name().unwrap_or_default().to_os_string();
     tmp_name.push(".tmp");
     let tmp = path.with_file_name(tmp_name);
@@ -216,6 +239,49 @@ mod tests {
     fn missing_file_is_a_first_run() {
         let dir = tempfile::tempdir().unwrap();
         assert!(matches!(Store::in_dir(dir.path()).load(), LoadOutcome::Missing));
+    }
+
+    #[test]
+    fn preferences_are_kept_in_their_own_file_next_to_the_data() {
+        use crate::prefs::Appearance;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        assert_eq!(store.load_preferences(), Preferences::default());
+
+        let preferences = Preferences {
+            appearance: Some(Appearance::Dark),
+        };
+        store.save_preferences(&preferences).unwrap();
+        assert_eq!(store.load_preferences(), preferences);
+        assert_eq!(
+            fs::read_to_string(dir.path().join(SETTINGS_FILE))
+                .unwrap()
+                .replace([' ', '\n'], ""),
+            r#"{"appearance":"dark"}"#
+        );
+        assert!(
+            matches!(store.load(), LoadOutcome::Missing),
+            "saving preferences doesn't create or touch the gradebook"
+        );
+    }
+
+    #[test]
+    fn missing_or_damaged_preferences_load_as_the_defaults() {
+        use crate::prefs::Appearance;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        let settings = dir.path().join(SETTINGS_FILE);
+
+        fs::write(&settings, "{ not json").unwrap();
+        assert_eq!(store.load_preferences(), Preferences::default());
+        fs::write(&settings, r#"{"appearance": "sepia"}"#).unwrap();
+        assert_eq!(store.load_preferences(), Preferences::default());
+
+        // Fields added by a newer version are ignored rather than rejected.
+        fs::write(&settings, r#"{"appearance": "light", "somethingNew": [1, 2]}"#).unwrap();
+        assert_eq!(store.load_preferences().appearance, Some(Appearance::Light));
     }
 
     #[test]

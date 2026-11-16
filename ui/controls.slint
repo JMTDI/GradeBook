@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { ChevronsIcon, CheckIcon } from "icons.slint";
+import { ChevronsIcon, CheckIcon, MoonIcon, SunIcon } from "icons.slint";
 
 // Text in the theme's primary colour at the body size.
 export component Label inherits Text {
@@ -209,6 +209,62 @@ export component TintedButton inherits Rectangle {
 
     focus := FocusScope {
         enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A round button that switches between light and dark. It shows the moon while the app is
+// light and the sun while it is dark, like a light switch for the other mode.
+export component ThemeToggle inherits Rectangle {
+    callback clicked();
+
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    background: Theme.accent.with-alpha(touch.pressed ? 0.28 : (touch.has-hover ? 0.22 : 0.16));
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: Theme.dark ? "Switch to light mode" : "Switch to dark mode";
+    accessible-action-default => {
+        root.clicked();
+    }
+
+    if Theme.dark: SunIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    if !Theme.dark: MoonIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
         focus-on-click: false;
         key-pressed(event) => {
             if event.text == " " || event.text == Key.Return {

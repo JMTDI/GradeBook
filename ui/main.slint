@@ -4,7 +4,7 @@ import "fonts/Inter-Bold.ttf";
 
 import { Theme } from "theme.slint";
 import { Backend } from "backend.slint";
-import { Divider } from "controls.slint";
+import { Divider, ThemeToggle } from "controls.slint";
 import { GradesPage } from "grades.slint";
 import { SettingsPage } from "settings.slint";
 import { BarChartIcon, GearIcon } from "icons.slint";
@@ -287,6 +287,15 @@ export component MainWindow inherits Window {
 
         TabBar {
             current <=> root.tab;
+        }
+    }
+
+    // On top of both screens, in the top-right corner.
+    ThemeToggle {
+        x: root.width - self.width - 14px;
+        y: 12px;
+        clicked => {
+            Backend.toggle-appearance();
         }
     }
 

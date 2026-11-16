@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::book::GradeBook;
 use crate::calc;
 use crate::model::{BackupData, GradeType};
+use crate::prefs::Appearance;
 use crate::store::{self, LoadOutcome, Store, StoreError};
 use crate::ui::{AlertData, Backend, ChipData, MainWindow, StudentItem, StudentRowData, Theme};
 use crate::view::{self, Filters, GradesView, RowView};
@@ -75,6 +76,7 @@ impl App {
     pub fn new(store: Option<Store>) -> Result<App, slint::PlatformError> {
         let window = MainWindow::new()?;
 
+        let saved_appearance = store.as_ref().and_then(|s| s.load_preferences().appearance);
         let (book, load_alert) = match store.as_ref().map(|s| s.load()) {
             Some(LoadOutcome::Loaded(data)) => (GradeBook::new(data), None),
             Some(LoadOutcome::Unreadable { error, moved_to }) => {
@@ -110,6 +112,9 @@ impl App {
         };
         app.install_options();
         app.install_callbacks();
+        if let Some(appearance) = saved_appearance {
+            apply_appearance(&app.window, appearance);
+        }
         push_weights(&app.window, &app.state);
         refresh_all(&app.window, &app.state);
         if let Some((title, message)) = load_alert {
@@ -329,6 +334,27 @@ impl App {
             });
         }
 
+        // The light/dark button: switches, and remembers the choice.
+        {
+            let (weak, state) = (self.window.as_weak(), self.state.clone());
+            backend.on_toggle_appearance(move || {
+                let Some(window) = weak.upgrade() else { return };
+                let next = if window.global::<Theme>().get_dark() {
+                    Appearance::Light
+                } else {
+                    Appearance::Dark
+                };
+                apply_appearance(&window, next);
+                if let Some(store) = &state.borrow().store {
+                    let mut preferences = store.load_preferences();
+                    preferences.appearance = Some(next);
+                    if let Err(e) = store.save_preferences(&preferences) {
+                        eprintln!("GradeBook: couldn't remember the appearance: {e}");
+                    }
+                }
+            });
+        }
+
         // Alerts.
         {
             let (weak, state) = (self.window.as_weak(), self.state.clone());
@@ -399,37 +425,27 @@ impl App {
 
     /// Forces the light or dark appearance instead of following the system.
     pub fn set_appearance(&self, appearance: Appearance) {
-        self.window.global::<Theme>().set_scheme(match appearance {
-            Appearance::System => 0,
-            Appearance::Light => 1,
-            Appearance::Dark => 2,
-        });
+        apply_appearance(&self.window, appearance);
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Appearance {
-    System,
-    Light,
-    Dark,
-}
-
-impl Appearance {
-    /// Reads `GRADEBOOK_THEME` (`light` or `dark`); anything else follows the system.
-    pub fn from_env() -> Appearance {
-        match std::env::var("GRADEBOOK_THEME").ok().as_deref() {
-            Some("light") => Appearance::Light,
-            Some("dark") => Appearance::Dark,
-            _ => Appearance::System,
-        }
-    }
+fn apply_appearance(window: &MainWindow, appearance: Appearance) {
+    window.global::<Theme>().set_scheme(match appearance {
+        Appearance::System => 0,
+        Appearance::Light => 1,
+        Appearance::Dark => 2,
+    });
 }
 
 pub fn run() -> Result<(), slint::PlatformError> {
     let store = store::default_data_dir().map(|dir| Store::in_dir(&dir));
     let in_memory_only = store.is_none();
     let app = App::new(store)?;
-    app.set_appearance(Appearance::from_env());
+    // A launch-time override beats the saved choice.
+    let from_env = Appearance::from_env();
+    if from_env != Appearance::System {
+        app.set_appearance(from_env);
+    }
     if in_memory_only {
         app.notify(
             "Nowhere to Save",

@@ -16,8 +16,9 @@ use slint::platform::{Platform, PointerEventButton, WindowAdapter, WindowEvent};
 use slint::{ComponentHandle, PhysicalSize, PlatformError, Rgb8Pixel};
 use uuid::Uuid;
 
-use gradebook::app::{App, Appearance};
+use gradebook::app::App;
 use gradebook::model::{BackupData, GradeEntry, GradeType, Student};
+use gradebook::prefs::Appearance;
 use gradebook::store::Store;
 use gradebook::ui::{AlertData, Backend};
 

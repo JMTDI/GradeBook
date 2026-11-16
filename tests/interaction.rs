@@ -16,8 +16,9 @@ use slint::{ComponentHandle, Model};
 
 use gradebook::app::App;
 use gradebook::model::{BackupData, GradeType};
+use gradebook::prefs::Appearance;
 use gradebook::store::{self, Store};
-use gradebook::ui::Backend;
+use gradebook::ui::{Backend, Theme};
 
 fn element(app: &App, label: &str) -> ElementHandle {
     ElementHandle::find_by_accessible_label(app.window(), label)
@@ -421,4 +422,42 @@ fn the_app_works_end_to_end() {
     let alert = third.window().global::<Backend>().get_alert();
     assert!(alert.visible && alert.confirm_label.is_empty());
     assert_eq!(alert.title, "Nowhere to Save");
+
+    // ---- Light and dark --------------------------------------------------------------
+    // The button in the corner switches the appearance on either screen, and the choice
+    // is remembered for the next start.
+    let theme_dir = tempfile::tempdir().unwrap();
+    let themed = App::new(Some(Store::in_dir(theme_dir.path()))).unwrap();
+    themed.window().show().unwrap();
+    themed
+        .window()
+        .window()
+        .set_size(slint::LogicalSize::new(1000.0, 760.0));
+    themed.set_appearance(Appearance::Light);
+    let theme = themed.window().global::<Theme>();
+    assert!(!theme.get_dark());
+
+    click(&themed, "Switch to dark mode");
+    assert!(theme.get_dark());
+    assert_eq!(
+        count(&themed, "Switch to dark mode"),
+        0,
+        "the button now offers the other mode"
+    );
+    assert_eq!(
+        Store::in_dir(theme_dir.path()).load_preferences().appearance,
+        Some(Appearance::Dark)
+    );
+
+    themed.set_tab(1);
+    click(&themed, "Switch to light mode");
+    assert!(!theme.get_dark(), "the button is on the Settings screen too");
+    click(&themed, "Switch to dark mode");
+    assert!(theme.get_dark());
+
+    let restarted = App::new(Some(Store::in_dir(theme_dir.path()))).unwrap();
+    assert!(
+        restarted.window().global::<Theme>().get_dark(),
+        "a new start uses the saved choice"
+    );
 }
