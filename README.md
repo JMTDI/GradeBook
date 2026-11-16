@@ -19,7 +19,7 @@ Weighted averages, letter grades and one-click backups, as a native app for Wind
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
-  <img src="docs/demo-light.gif" alt="GradeBook in action: adding a score updates the averages, and changing the weights in Settings updates them again" width="760">
+  <img src="docs/demo-light.gif" alt="GradeBook in action: adding a score updates the averages, changing the weights in Settings updates them again, and the button in the corner switches between light and dark" width="760">
 </picture>
 
 </div>
@@ -29,7 +29,7 @@ Weighted averages, letter grades and one-click backups, as a native app for Wind
 - 📚 **Organised the way you teach.** Grade levels 1–10, six periods and 20 subjects, one class at a time.
 - ⚖️ **Weighted averages.** Tests, quizzes and homework count as much as you decide (50 / 17 / 33 to begin with). The weights re-balance on their own for students who don't have every type of grade yet.
 - 🔤 **Letter grades that add up.** From A+ to F, including fractional scores: 91.5 is a B and 99.5 is an A.
-- 🌗 **Light and dark.** It follows your system's setting.
+- 🌗 **Light and dark.** It follows your system's setting, and a button in the corner switches it. GradeBook remembers your choice.
 - 💾 **Saves as you go.** Every change is written to disk straight away, in a way that can't leave a half-written file behind.
 - 🛟 **Backup and Restore.** The whole gradebook goes into one JSON file, and a restore keeps a safety copy of whatever it replaces.
 - ⚡ **Light on your computer.** A native Rust app built with [Slint](https://slint.dev): no browser engine and no GPU needed. On Linux the window opens in about half a second and the app idles at around 20 MB of memory.
@@ -61,9 +61,9 @@ Two screens, with a tab bar at the bottom to switch between them.
 ### Grades
 
 Choose a grade level (1–10), a period (1–6) and a subject (20 to choose from). Every student in that
-grade level gets a row. Choose **Test**, **Quiz** or **Homework**, type a score (decimals work:
-`92.5`, or `92,5`) and click **Add**. Scores appear as chips tinted by type (red for tests, blue for
-quizzes, grey for homework) with their letter grade, and the red × beside a score deletes it. Under
+grade level gets a row. Choose **Homework**, **Test** or **Quiz**, type a score (decimals work:
+`92.5`, or `92,5`) and click **Add**. Scores appear as chips tinted by type (grey for homework, red
+for tests, blue for quizzes) with their letter grade, and the red × beside a score deletes it. Under
 the chips is the student's weighted average with its letter grade, and the class average is at the
 bottom.
 
@@ -108,7 +108,7 @@ average always matches the rounded number displayed.
 | **From** | 100 | 96 | 94 | 92 | 88 | 86 | 84 | 79 | 76 | 70 | 63 | 0 |
 
 > [!TIP]
-> GradeBook follows your system's light or dark setting. To pick one yourself, set the `GRADEBOOK_THEME` environment variable to `light` or `dark`.
+> GradeBook follows your system's light or dark setting. To switch, click the moon or sun button in the top-right corner of either screen; GradeBook remembers your choice. To start in one or the other no matter what, set the `GRADEBOOK_THEME` environment variable to `light` or `dark`.
 
 ## Your data
 
@@ -124,6 +124,9 @@ GradeBook saves after every change, in `gradebook.json` in:
 `/Applications/GradeBook.app/Contents/MacOS/gradebook --data-dir`; the Windows build has no
 console window, so use the folder above). Set `GRADEBOOK_DATA_DIR` to keep the data somewhere
 else (for example on a USB stick). Uninstalling never deletes it.
+
+A small `settings.json` next to `gradebook.json` remembers your light or dark choice. It isn't part
+of a Backup.
 
 ### Backup and Restore
 
