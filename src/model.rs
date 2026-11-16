@@ -32,23 +32,24 @@ pub struct Student {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GradeType {
+    #[serde(rename = "Homework")]
+    Homework,
     #[serde(rename = "Test")]
     Test,
     #[serde(rename = "Quiz")]
     Quiz,
-    #[serde(rename = "Homework")]
-    Homework,
 }
 
 impl GradeType {
-    pub const ALL: [GradeType; 3] = [GradeType::Test, GradeType::Quiz, GradeType::Homework];
+    /// The order the types are listed in everywhere in the UI.
+    pub const ALL: [GradeType; 3] = [GradeType::Homework, GradeType::Test, GradeType::Quiz];
 
     /// Position in [`GradeType::ALL`]; also the index used by the UI.
     pub fn index(self) -> usize {
         match self {
-            GradeType::Test => 0,
-            GradeType::Quiz => 1,
-            GradeType::Homework => 2,
+            GradeType::Homework => 0,
+            GradeType::Test => 1,
+            GradeType::Quiz => 2,
         }
     }
 
@@ -58,9 +59,9 @@ impl GradeType {
 
     pub fn label(self) -> &'static str {
         match self {
+            GradeType::Homework => "Homework",
             GradeType::Test => "Test",
             GradeType::Quiz => "Quiz",
-            GradeType::Homework => "Homework",
         }
     }
 }
@@ -185,6 +186,16 @@ mod tests {
     fn rejects_unknown_grade_types() {
         let bad = BACKUP.replace("\"Quiz\"", "\"Exam\"");
         assert!(serde_json::from_str::<BackupData>(&bad).is_err());
+    }
+
+    #[test]
+    fn grade_types_are_listed_homework_test_quiz() {
+        assert_eq!(GradeType::ALL.map(GradeType::label), ["Homework", "Test", "Quiz"]);
+        // The UI refers to a type by its position in the list.
+        for (position, grade_type) in GradeType::ALL.into_iter().enumerate() {
+            assert_eq!(grade_type.index(), position);
+            assert_eq!(GradeType::from_index(position), Some(grade_type));
+        }
     }
 
     #[test]

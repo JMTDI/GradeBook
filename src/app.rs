@@ -145,6 +145,7 @@ impl App {
             .position(|s| *s == calc::DEFAULT_SUBJECT)
             .unwrap_or(0);
         backend.set_subject_index(math as i32);
+        backend.set_grade_type(GradeType::Test.index() as i32);
     }
 
     fn install_callbacks(&self) {

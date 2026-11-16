@@ -42,6 +42,21 @@ fn count(app: &App, label: &str) -> usize {
     ElementHandle::find_by_accessible_label(app.window(), label).count()
 }
 
+/// The horizontal position of the first control with this role and label (for the type
+/// selector and the legend, that is the one belonging to the first row).
+fn x_of(app: &App, role: AccessibleRole, label: &str) -> f32 {
+    let wanted = label.to_string();
+    ElementQuery::from_root(app.window())
+        .match_descendants()
+        .match_accessible_role(role)
+        .match_predicate(move |e| e.accessible_label().is_some_and(|l| l == wanted))
+        .find_all()
+        .first()
+        .unwrap_or_else(|| panic!("no {role:?} labelled {label:?}"))
+        .absolute_position()
+        .x
+}
+
 fn click(app: &App, label: &str) {
     element(app, label).mock_single_click(PointerEventButton::Left);
 }
@@ -136,6 +151,13 @@ fn the_app_works_end_to_end() {
     app.set_tab(0);
     assert_eq!(row_names(&app), ["Ada Lovelace", "Grace Hopper"]);
 
+    // Grades are entered as Homework, Test or Quiz, in that order, on the selector and
+    // in the legend of tints above the list.
+    let tab = |label| x_of(&app, AccessibleRole::Tab, label);
+    assert!(tab("Homework") < tab("Test") && tab("Test") < tab("Quiz"));
+    let legend = |label| x_of(&app, AccessibleRole::Text, label);
+    assert!(legend("Homework") < legend("Tests") && legend("Tests") < legend("Quizzes"));
+
     // Letters are rejected while typing, a comma counts as the decimal separator.
     type_into(&app, "Grade for Ada Lovelace", "9x2,5");
     assert_eq!(value(&app, "Grade for Ada Lovelace"), "92.5");
@@ -160,9 +182,10 @@ fn the_app_works_end_to_end() {
     assert_eq!(ada.average, "92.5 B+");
     assert_eq!(backend.get_class_average(), "92.5 B+");
 
-    // The type selector is shared by every row.
+    // The type selector is shared by every row, and starts on Test.
+    assert_eq!(backend.get_grade_type(), GradeType::Test.index() as i32);
     click(&app, "Quiz");
-    assert_eq!(backend.get_grade_type(), 1);
+    assert_eq!(backend.get_grade_type(), GradeType::Quiz.index() as i32);
     type_into(&app, "Grade for Grace Hopper", "70");
     click(&app, "Add grade for Grace Hopper");
     let data = saved(dir.path());

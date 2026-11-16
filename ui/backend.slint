@@ -12,7 +12,8 @@ export global Backend {
     in-out property <int> grade-level-index: 0;
     in-out property <int> period-index: 0;
     in-out property <int> subject-index: 7;
-    // Shared by every row: 0 = test, 1 = quiz, 2 = homework.
+    // Shared by every row: the position in `GradeType::ALL` (0 = homework, 1 = test,
+    // 2 = quiz). The Rust side picks the starting choice.
     in-out property <int> grade-type: 0;
     in property <[StudentRowData]> rows;
     in property <string> class-average;

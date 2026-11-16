@@ -37,4 +37,10 @@ export global Theme {
     out property <color> menu-background: dark ? #2c2c2e : #f6f6f8;
     out property <color> menu-highlight: dark ? #ffffff1f : #0000000f;
     out property <color> scrim: #00000066;
+
+    // The tint of each type of grade, by its index (the order of `GradeType::ALL`):
+    // 0 = homework, 1 = test, 2 = quiz.
+    public pure function grade-tint(kind: int) -> color {
+        return kind == 0 ? gray : (kind == 1 ? red : blue);
+    }
 }

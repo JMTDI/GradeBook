@@ -5,7 +5,7 @@ import { ChipData, StudentRowData } from "types.slint";
 import { Divider, MenuPicker, ProminentButton, RoundedField, SegmentedControl, VCenter } from "controls.slint";
 import { ColorBarsIcon, CrossIcon } from "icons.slint";
 
-// One entry of the Tests / Quizzes / Homework legend.
+// One entry of the Homework / Tests / Quizzes legend.
 component LegendDot inherits VerticalLayout {
     in property <color> tint;
     in property <string> label;
@@ -39,7 +39,7 @@ component GradeChip inherits HorizontalLayout {
         width: 42px;
         height: 36px;
         border-radius: 4px;
-        background: (root.chip.kind == 0 ? Theme.red : (root.chip.kind == 1 ? Theme.blue : Theme.gray)).with-alpha(0.2);
+        background: Theme.grade-tint(root.chip.kind).with-alpha(0.2);
 
         VerticalLayout {
             alignment: center;
@@ -129,7 +129,7 @@ component StudentRow inherits VerticalLayout {
         VCenter {
             width: 220px;
             SegmentedControl {
-                options: ["Test", "Quiz", "Homework"];
+                options: ["Homework", "Test", "Quiz"];
                 current-index <=> Backend.grade-type;
             }
         }
@@ -214,19 +214,9 @@ export component GradesPage inherits Rectangle {
             padding-bottom: 16px;
             spacing: 30px;
             alignment: center;
-            LegendDot {
-                tint: Theme.red;
-                label: "Tests";
-            }
-
-            LegendDot {
-                tint: Theme.blue;
-                label: "Quizzes";
-            }
-
-            LegendDot {
-                tint: Theme.gray;
-                label: "Homework";
+            for label[kind] in ["Homework", "Tests", "Quizzes"]: LegendDot {
+                tint: Theme.grade-tint(kind);
+                label: label;
             }
         }
 
