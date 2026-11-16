@@ -18,8 +18,8 @@ Weighted averages, letter grades and one-click backups, as a native app for Wind
 [Features](#features) · [Install](#install) · [Using the app](#using-the-app) · [Your data](#your-data) · [Build from source](#build-from-source)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grades-dark.png">
-  <img src="docs/screenshots/grades.png" alt="The Grades screen: every student in a grade level with their scores, averages and letter grades" width="760">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
+  <img src="docs/demo-light.gif" alt="GradeBook in action: adding a score updates the averages, and changing the weights in Settings updates them again" width="760">
 </picture>
 
 </div>
@@ -67,6 +67,13 @@ quizzes, grey for homework) with their letter grade, and the red × beside a sco
 the chips is the student's weighted average with its letter grade, and the class average is at the
 bottom.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grades-dark.png">
+    <img src="docs/screenshots/grades.png" alt="The Grades screen: every student in a grade level with their scores, averages and letter grades" width="640">
+  </picture>
+</p>
+
 ### Settings
 
 Add students (a name and a grade level), set the weights of tests, quizzes and homework
@@ -87,7 +94,7 @@ The scores of each type are averaged first, then combined using the weights. The
 re-balanced over the types a student has scores for, so a student with only tests is graded on tests
 alone.
 
-For example, Ada in the screenshot at the top has tests of 96 and 92.5 (average 94.25), quizzes of
+For example, Ada in the Grades screenshot above has tests of 96 and 92.5 (average 94.25), quizzes of
 88 and 100 (average 94) and eight homework scores that average 94.56. With the default weights
 that makes 0.50 × 94.25 + 0.17 × 94 + 0.33 × 94.56 ≈ 94.3, an A−.
 
@@ -211,7 +218,7 @@ tests/      interaction.rs, screenshots.rs       headless UI tests
 packaging/  linux/, macos/, windows/             installers
 assets/     icons/                               the app icons
 examples/   make_icons.rs                        regenerates assets/icons
-docs/       screenshots/                         the images in this README
+docs/       screenshots/, demo-*.gif             the images in this README
 ```
 
 ## Licenses
