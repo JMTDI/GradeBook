@@ -1,0 +1,41 @@
+import { StudentRowData, StudentItem, AlertData } from "types.slint";
+
+// Everything the UI shows and every action it can trigger. The Rust side fills
+// the `in` properties and implements the callbacks.
+export global Backend {
+    // Picker options.
+    in property <[string]> grade-level-options;
+    in property <[string]> period-options;
+    in property <[string]> subject-options;
+
+    // Grades screen.
+    in-out property <int> grade-level-index: 0;
+    in-out property <int> period-index: 0;
+    in-out property <int> subject-index: 7;
+    // Shared by every row: 0 = test, 1 = quiz, 2 = homework.
+    in-out property <int> grade-type: 0;
+    in property <[StudentRowData]> rows;
+    in property <string> class-average;
+    callback filters-changed();
+    callback add-grade(string, string) -> bool;
+    callback delete-grade(string);
+    callback draft-edited(string, string);
+    pure callback sanitize-grade(string) -> string;
+    pure callback is-blank(string) -> bool;
+
+    // Settings screen.
+    in property <[StudentItem]> students;
+    in-out property <float> test-weight: 50;
+    in-out property <float> quiz-weight: 17;
+    in-out property <float> homework-weight: 33;
+    callback weights-changed();
+    callback add-student(string, int);
+    callback delete-student(string);
+    callback backup();
+    callback restore();
+
+    // Alerts and confirmations.
+    in property <AlertData> alert;
+    callback alert-confirmed();
+    callback alert-dismissed();
+}

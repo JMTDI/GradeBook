@@ -1,0 +1,253 @@
+name: Desktop app
+
+# Builds, tests and packages the Windows, macOS and Linux versions.
+#
+# Every push and pull request builds installers and uploads them as workflow artifacts.
+# Pushing a tag named v<version> (matching the version in Cargo.toml) also
+# publishes them as a GitHub release.
+
+on:
+  push:
+    branches: [main, desktop-app]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux:
+    name: Linux (.deb and AppImage)
+    # The oldest runner we use: binaries built here run on newer distributions, not the
+    # other way around (the glibc version they need is fixed at build time).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig1-dev dpkg-dev \
+            xvfb xdotool imagemagick \
+            libx11-6 libx11-xcb1 libxcb1 libxcb-xkb1 libxcursor1 libxext6 libxfixes3 libxi6 libxrender1 \
+            libxkbcommon0 libxkbcommon-x11-0
+
+      - name: Check that the tag matches the version in Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "The tag is $GITHUB_REF_NAME but Cargo.toml says version $version"
+            exit 1
+          fi
+
+      # Skipped for release tags: a lint added to a newer stable Rust shouldn't block a release.
+      - name: Check formatting and lints
+        if: github.ref_type != 'tag'
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Start the app under a virtual display
+        run: |
+          mkdir -p target/ci
+          ./target/release/gradebook --version
+          packaging/linux/smoke-test.sh target/release/gradebook target/ci/linux-window.png
+
+      - name: Build the .deb
+        run: |
+          cargo install cargo-deb --locked --version 3.8.0
+          cargo deb --no-build
+          mkdir -p dist
+          cp target/debian/*.deb dist/
+
+      - name: Build the AppImage
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          APPIMAGETOOL="$PWD/appimagetool" packaging/linux/build-appimage.sh
+
+      - name: Start the AppImage under a virtual display
+        run: APPIMAGE_EXTRACT_AND_RUN=1 packaging/linux/smoke-test.sh dist/GradeBook-*.AppImage
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-linux
+          path: dist/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-linux
+          path: |
+            target/tmp/screenshots/*.png
+            target/ci/*.png
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows (installer)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Start the app
+        shell: pwsh
+        run: |
+          $env:GRADEBOOK_DATA_DIR = Join-Path $env:RUNNER_TEMP "gradebook-data"
+          $app = Start-Process -FilePath "./target/release/gradebook.exe" -PassThru
+          Start-Sleep -Seconds 5
+          if ($app.HasExited) { throw "GradeBook exited with code $($app.ExitCode) right after starting" }
+          Stop-Process -Id $app.Id
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          }
+          & $makensis /DVERSION=$version "/DROOT=$($PWD.Path)" packaging/windows/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-windows
+          path: target/tmp/screenshots/*.png
+          if-no-files-found: ignore
+
+  macos:
+    name: macOS (universal .dmg)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test
+
+      - name: Build for Apple Silicon and Intel
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Start the app
+        run: |
+          export GRADEBOOK_DATA_DIR="$RUNNER_TEMP/gradebook-data"
+          ./target/aarch64-apple-darwin/release/gradebook &
+          pid=$!
+          sleep 5
+          if ! kill -0 "$pid" 2> /dev/null; then
+            echo "GradeBook exited right after starting"
+            exit 1
+          fi
+          kill "$pid"
+
+      - name: Build the .app and .dmg
+        run: |
+          packaging/macos/build-dmg.sh
+          lipo -info dist/macos/GradeBook.app/Contents/MacOS/gradebook
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-macos
+          path: target/tmp/screenshots/*.png
+          if-no-files-found: ignore
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: installers
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l installers
+          version="${GITHUB_REF_NAME#v}"
+          # The Slint badge is the attribution its royalty-free license asks for on the page
+          # where the binaries can be downloaded.
+          cat > notes.md <<'EOF'
+          Installers for Windows (.exe), macOS (.dmg) and Linux (.deb and .AppImage).
+
+          They are not code-signed, so Windows and macOS show a warning the first time you open the app. See the install notes in the [README](https://github.com/JMTDI/GradeBook/blob/main/README.md#install).
+
+          <a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" width="160"></a>
+          EOF
+          gh release create "$GITHUB_REF_NAME" installers/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "GradeBook $version" \
+            --notes-file notes.md

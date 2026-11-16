@@ -1,0 +1,267 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Backend } from "backend.slint";
+import { ChipData, StudentRowData } from "types.slint";
+import { Divider, MenuPicker, ProminentButton, RoundedField, SegmentedControl, VCenter } from "controls.slint";
+import { ColorBarsIcon, CrossIcon } from "icons.slint";
+
+// One entry of the Tests / Quizzes / Homework legend.
+component LegendDot inherits VerticalLayout {
+    in property <color> tint;
+    in property <string> label;
+
+    spacing: 6px;
+
+    Rectangle {
+        width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        background: root.tint.with-alpha(0.5);
+    }
+
+    Text {
+        text: root.label;
+        font-size: 12px;
+        color: Theme.label;
+        horizontal-alignment: center;
+    }
+}
+
+// A grade (letter above value, tinted by type) with its small remove button.
+component GradeChip inherits HorizontalLayout {
+    in property <ChipData> chip;
+    in property <string> student;
+    callback remove();
+
+    spacing: 2px;
+
+    Rectangle {
+        width: 42px;
+        height: 36px;
+        border-radius: 4px;
+        background: (root.chip.kind == 0 ? Theme.red : (root.chip.kind == 1 ? Theme.blue : Theme.gray)).with-alpha(0.2);
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 1px;
+            Text {
+                text: root.chip.letter;
+                font-size: 11px;
+                color: Theme.gray;
+                horizontal-alignment: center;
+            }
+
+            Text {
+                text: root.chip.value;
+                font-size: 15px;
+                color: Theme.label;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    Rectangle {
+        width: 14px;
+        height: 36px;
+        accessible-role: button;
+        accessible-label: "Remove grade " + root.chip.value + " for " + root.student;
+        accessible-action-default => {
+            root.remove();
+        }
+
+        CrossIcon { }
+
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.remove();
+            }
+        }
+    }
+}
+
+component StudentRow inherits VerticalLayout {
+    in property <StudentRowData> data;
+
+    spacing: 4px;
+
+    function submit() {
+        if Backend.add-grade(root.data.id, field.text) {
+            field.text = "";
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 10px;
+        alignment: start;
+
+        Text {
+            width: 100px;
+            text: root.data.name;
+            font-size: 17px;
+            font-weight: 600;
+            color: Theme.label;
+            wrap: word-wrap;
+            vertical-alignment: center;
+        }
+
+        VCenter {
+            width: 60px;
+            field := RoundedField {
+                placeholder: "Grade";
+                accessible-label: "Grade for " + root.data.name;
+                text: root.data.draft;
+                accepted => {
+                    root.submit();
+                }
+                edited(typed) => {
+                    // Only digits and one decimal point, up to six characters.
+                    let clean = Backend.sanitize-grade(typed);
+                    Backend.draft-edited(root.data.id, clean);
+                    if clean != typed {
+                        self.text = clean;
+                    }
+                }
+            }
+        }
+
+        VCenter {
+            width: 220px;
+            SegmentedControl {
+                options: ["Test", "Quiz", "Homework"];
+                current-index <=> Backend.grade-type;
+            }
+        }
+
+        VCenter {
+            ProminentButton {
+                text: "Add";
+                accessible-label: "Add grade for " + root.data.name;
+                clicked => {
+                    root.submit();
+                }
+            }
+        }
+    }
+
+    if root.data.chips.length > 0: Flickable {
+        height: 36px;
+        content-width: chips.preferred-width;
+
+        chips := HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            for chip in root.data.chips: GradeChip {
+                chip: chip;
+                student: root.data.name;
+                remove => {
+                    Backend.delete-grade(chip.id);
+                }
+            }
+        }
+    }
+
+    if root.data.average != "": HorizontalLayout {
+        padding-left: 100px;
+        Text {
+            text: root.data.average;
+            font-size: 15px;
+            color: Theme.blue;
+        }
+    }
+
+    Divider { }
+}
+
+export component GradesPage inherits Rectangle {
+    VerticalLayout {
+        spacing: 12px;
+
+        HorizontalLayout {
+            vertical-stretch: 0;
+            padding: 16px;
+            spacing: 8px;
+            alignment: center;
+
+            MenuPicker {
+                options: Backend.grade-level-options;
+                current-index <=> Backend.grade-level-index;
+                selected(index) => {
+                    Backend.filters-changed();
+                }
+            }
+
+            MenuPicker {
+                options: Backend.period-options;
+                current-index <=> Backend.period-index;
+                selected(index) => {
+                    Backend.filters-changed();
+                }
+            }
+
+            MenuPicker {
+                options: Backend.subject-options;
+                current-index <=> Backend.subject-index;
+                selected(index) => {
+                    Backend.filters-changed();
+                }
+            }
+        }
+
+        HorizontalLayout {
+            vertical-stretch: 0;
+            padding-bottom: 16px;
+            spacing: 30px;
+            alignment: center;
+            LegendDot {
+                tint: Theme.red;
+                label: "Tests";
+            }
+
+            LegendDot {
+                tint: Theme.blue;
+                label: "Quizzes";
+            }
+
+            LegendDot {
+                tint: Theme.gray;
+                label: "Homework";
+            }
+        }
+
+        Divider {
+            vertical-stretch: 0;
+        }
+
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-bottom: 16px;
+                spacing: 12px;
+                alignment: start;
+
+                for row in Backend.rows: StudentRow {
+                    data: row;
+                }
+
+                if Backend.class-average != "": HorizontalLayout {
+                    padding-top: 16px;
+                    spacing: 8px;
+                    alignment: center;
+                    ColorBarsIcon { }
+
+                    Text {
+                        text: "Class Average: " + Backend.class-average;
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: Theme.purple;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,299 @@
+import "fonts/Inter-Regular.ttf";
+import "fonts/Inter-SemiBold.ttf";
+import "fonts/Inter-Bold.ttf";
+
+import { Theme } from "theme.slint";
+import { Backend } from "backend.slint";
+import { Divider } from "controls.slint";
+import { GradesPage } from "grades.slint";
+import { SettingsPage } from "settings.slint";
+import { BarChartIcon, GearIcon } from "icons.slint";
+
+export { Backend } from "backend.slint";
+export { Theme } from "theme.slint";
+export { AlertData, ChipData, StudentItem, StudentRowData } from "types.slint";
+
+// One tab of the bottom tab bar: icon above a small label.
+component TabBarItem inherits Rectangle {
+    in property <string> title;
+    in property <bool> selected;
+    callback activated();
+
+    forward-focus: focus;
+    accessible-role: tab;
+    accessible-label: root.title;
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => {
+        root.activated();
+    }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+
+        Rectangle {
+            height: 25px;
+            HorizontalLayout {
+                alignment: center;
+                @children
+            }
+        }
+
+        Text {
+            text: root.title;
+            font-size: 10px;
+            color: root.selected ? Theme.accent : Theme.gray;
+            horizontal-alignment: center;
+        }
+    }
+
+    Rectangle {
+        x: 6px;
+        y: 3px;
+        width: parent.width - 12px;
+        height: parent.height - 6px;
+        border-radius: 8px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.activated();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.activated();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+component TabBar inherits Rectangle {
+    in-out property <int> current;
+
+    height: 49px;
+    background: Theme.tab-bar-background;
+
+    Divider {
+        y: 0px;
+    }
+
+    HorizontalLayout {
+        TabBarItem {
+            title: "Grades";
+            selected: root.current == 0;
+            activated => {
+                root.current = 0;
+            }
+
+            BarChartIcon {
+                tint: root.current == 0 ? Theme.accent : Theme.gray;
+                filled: root.current == 0;
+            }
+        }
+
+        TabBarItem {
+            title: "Settings";
+            selected: root.current == 1;
+            activated => {
+                root.current = 1;
+            }
+
+            GearIcon {
+                tint: root.current == 1 ? Theme.accent : Theme.gray;
+                filled: root.current == 1;
+            }
+        }
+    }
+}
+
+// Alert dialog: used for errors (OK) and for confirmations (Cancel + action).
+component AlertOverlay inherits Rectangle {
+    property <bool> confirmable: Backend.alert.confirm-label != "";
+
+    background: Theme.scrim;
+    forward-focus: focus;
+
+    init => {
+        focus.focus();
+    }
+
+    // Swallow clicks so nothing behind the alert reacts.
+    TouchArea { }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                Backend.alert-dismissed();
+                return accept;
+            } else if event.text == Key.Return {
+                if root.confirmable {
+                    Backend.alert-confirmed();
+                } else {
+                    Backend.alert-dismissed();
+                }
+                return accept;
+            } else if event.text == Key.Tab || event.text == Key.Backtab {
+                // Keep the keyboard on the alert instead of the page behind it.
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    Rectangle {
+        width: 300px;
+        height: card.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: max(24px, (parent.height - self.height) / 2 - 24px);
+        border-radius: 14px;
+        background: Theme.menu-background;
+        border-width: 1phx;
+        border-color: Theme.separator;
+        accessible-role: none;
+
+        card := VerticalLayout {
+            VerticalLayout {
+                padding-top: 20px;
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-bottom: 16px;
+                spacing: 4px;
+
+                Text {
+                    text: Backend.alert.title;
+                    font-size: 17px;
+                    font-weight: 600;
+                    color: Theme.label;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: Backend.alert.message;
+                    font-size: 13px;
+                    color: Theme.label;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+
+            Divider { }
+
+            HorizontalLayout {
+                height: 44px;
+
+                if root.confirmable: Rectangle {
+                    accessible-role: button;
+                    accessible-label: "Cancel";
+                    accessible-action-default => {
+                        Backend.alert-dismissed();
+                    }
+
+                    Text {
+                        text: "Cancel";
+                        font-size: 17px;
+                        color: Theme.accent;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            Backend.alert-dismissed();
+                        }
+                    }
+                }
+
+                if root.confirmable: Rectangle {
+                    width: 1phx;
+                    background: Theme.separator;
+                }
+
+                Rectangle {
+                    accessible-role: button;
+                    accessible-label: root.confirmable ? Backend.alert.confirm-label : "OK";
+                    accessible-action-default => {
+                        if root.confirmable {
+                            Backend.alert-confirmed();
+                        } else {
+                            Backend.alert-dismissed();
+                        }
+                    }
+
+                    Text {
+                        text: root.confirmable ? Backend.alert.confirm-label : "OK";
+                        font-size: 17px;
+                        font-weight: 600;
+                        color: Backend.alert.destructive ? Theme.red : Theme.accent;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            if root.confirmable {
+                                Backend.alert-confirmed();
+                            } else {
+                                Backend.alert-dismissed();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    // 0 = Grades, 1 = Settings
+    in-out property <int> tab: 0;
+
+    title: "GradeBook";
+    icon: @image-url("../assets/icons/icon-256.png");
+    default-font-family: "Inter";
+    background: Theme.background;
+    preferred-width: 1000px;
+    preferred-height: 760px;
+    min-width: 540px;
+    min-height: 640px;
+
+    // Both pages stay alive, so each keeps its state. A field on the
+    // hidden page loses the keyboard focus by itself, which the tests check.
+    VerticalLayout {
+        Rectangle {
+            vertical-stretch: 1;
+
+            GradesPage {
+                visible: root.tab == 0;
+            }
+
+            SettingsPage {
+                visible: root.tab == 1;
+            }
+        }
+
+        TabBar {
+            current <=> root.tab;
+        }
+    }
+
+    if Backend.alert.visible: AlertOverlay {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+}

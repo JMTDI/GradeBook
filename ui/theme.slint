@@ -1,0 +1,40 @@
+import { Palette } from "std-widgets.slint";
+
+// The colour palette, in light and dark variants.
+export global Theme {
+    // 0 = follow the system, 1 = light, 2 = dark
+    in-out property <int> scheme: 0;
+    out property <bool> dark: root.scheme == 2 || (root.scheme == 0 && Palette.color-scheme == ColorScheme.dark);
+
+    out property <color> background: dark ? #000000 : #ffffff;
+    out property <color> grouped-background: dark ? #000000 : #f2f2f7;
+    out property <color> cell-background: dark ? #1c1c1e : #ffffff;
+
+    out property <color> label: dark ? #ffffff : #000000;
+    out property <color> secondary-label: dark ? #ebebf599 : #3c3c4399;
+    out property <color> tertiary-label: dark ? #ebebf54d : #3c3c434d;
+    out property <color> separator: dark ? #54545899 : #3c3c434a;
+
+    out property <color> fill: dark ? #7878805c : #78788033;
+    out property <color> segmented-background: dark ? #7676803d : #7676801f;
+    out property <color> segmented-selected: dark ? #636366 : #ffffff;
+    out property <color> segmented-selected-border: dark ? #00000000 : #0000001a;
+    out property <color> thumb-ring: dark ? #00000066 : #00000014;
+    out property <color> thumb-border: dark ? #00000000 : #00000026;
+
+    out property <color> field-background: dark ? #1c1c1e : #ffffff;
+    out property <color> field-border: dark ? #54545899 : #3c3c4333;
+
+    out property <color> accent: dark ? #5e5ce6 : #5856d6;
+    out property <color> red: dark ? #ff453a : #ff3b30;
+    out property <color> blue: dark ? #0a84ff : #007aff;
+    out property <color> gray: #8e8e93;
+    out property <color> green: dark ? #30d158 : #34c759;
+    out property <color> purple: dark ? #bf5af2 : #af52de;
+    out property <color> orange: dark ? #ff9f0a : #ff9500;
+
+    out property <color> tab-bar-background: dark ? #1d1d1f : #f7f7f7;
+    out property <color> menu-background: dark ? #2c2c2e : #f6f6f8;
+    out property <color> menu-highlight: dark ? #ffffff1f : #0000000f;
+    out property <color> scrim: #00000066;
+}

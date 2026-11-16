@@ -1,0 +1,609 @@
+import { Theme } from "theme.slint";
+import { ChevronsIcon, CheckIcon } from "icons.slint";
+
+// Text in the theme's primary colour at the body size.
+export component Label inherits Text {
+    color: Theme.label;
+    font-size: 17px;
+}
+
+// 1px hairline between sections.
+export component Divider inherits Rectangle {
+    height: 1phx;
+    background: Theme.separator;
+}
+
+// Centres its (fixed-height) children vertically.
+export component VCenter inherits VerticalLayout {
+    alignment: center;
+}
+
+// `TextField(...).textFieldStyle(.roundedBorder)`
+export component RoundedField inherits Rectangle {
+    in property <string> placeholder;
+    in-out property <string> text <=> input.text;
+    out property <bool> has-focus: input.has-focus;
+    callback accepted();
+    callback edited(string);
+
+    property <length> margin: 6px;
+
+    height: 34px;
+    border-radius: 7px;
+    background: Theme.field-background;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.field-border;
+    clip: true;
+    forward-focus: input;
+    accessible-role: text-input;
+    accessible-label: root.placeholder;
+    accessible-placeholder-text: root.placeholder;
+    accessible-value <=> input.text;
+    accessible-action-set-value(value) => {
+        input.text = value;
+        root.edited(value);
+    }
+
+    Text {
+        x: root.margin;
+        width: parent.width - 2 * root.margin;
+        height: 100%;
+        vertical-alignment: center;
+        font-size: 17px;
+        color: Theme.tertiary-label;
+        text: (input.text == "" && input.preedit-text == "") ? root.placeholder : "";
+        accessible-role: none;
+    }
+
+    input := TextInput {
+        property <length> computed-x;
+
+        x: root.margin + min(0px, max(parent.width - 2 * root.margin - self.width - self.text-cursor-width, self.computed-x));
+        width: max(parent.width - 2 * root.margin - self.text-cursor-width, self.preferred-width);
+        height: 100%;
+        vertical-alignment: center;
+        single-line: true;
+        font-size: 17px;
+        color: Theme.label;
+        selection-background-color: Theme.accent.with-alpha(0.35);
+        selection-foreground-color: Theme.label;
+        accessible-role: none;
+
+        // Keep the caret visible in a field that is narrower than its text.
+        cursor-position-changed(pos) => {
+            if pos.x + self.computed-x < 0px {
+                self.computed-x = -pos.x;
+            } else if pos.x + self.computed-x > parent.width - 2 * root.margin - self.text-cursor-width {
+                self.computed-x = parent.width - 2 * root.margin - pos.x - self.text-cursor-width;
+            }
+        }
+        accepted => {
+            root.accepted();
+        }
+        edited => {
+            root.edited(self.text);
+        }
+    }
+}
+
+// `.buttonStyle(.borderedProminent)`
+export component ProminentButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 8px;
+    background: !root.enabled ? Theme.fill : (touch.pressed ? Theme.accent.darker(0.25) : Theme.accent);
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 6px;
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
+
+        Text {
+            text: root.text;
+            color: root.enabled ? #ffffff : Theme.tertiary-label;
+            font-size: 17px;
+            vertical-alignment: center;
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// `.buttonStyle(.bordered)`
+export component TintedButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 8px;
+    background: Theme.accent.with-alpha(touch.pressed ? 0.28 : 0.16);
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 6px;
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
+
+        Text {
+            text: root.text;
+            color: Theme.accent;
+            font-size: 17px;
+            vertical-alignment: center;
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A `Picker` in the default menu style: accent-coloured value with chevrons that
+// opens a menu of options.
+export component MenuPicker inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current-index;
+    callback selected(int);
+
+    property <length> row-height: 36px;
+    property <length> menu-padding: 6px;
+    property <length> menu-content-height: root.options.length * root.row-height + 2 * root.menu-padding;
+    property <length> menu-height: min(root.menu-content-height, 7.5 * root.row-height);
+    // Scroll offset of the open menu; kept here because the popup's own elements
+    // can't be reached from outside it.
+    property <length> menu-scroll-y: 0px;
+
+    height: 28px;
+    forward-focus: focus;
+    accessible-role: combobox;
+    accessible-value: root.options[root.current-index];
+    accessible-expandable: true;
+    accessible-action-expand => {
+        root.open();
+    }
+
+    function open() {
+        // Scroll so the current option is visible, a few rows from the top.
+        root.menu-scroll-y = -Math.min(
+            Math.max(0px, root.current-index * root.row-height - 3 * root.row-height),
+            Math.max(0px, root.menu-content-height - root.menu-height)
+        );
+        popup.show();
+    }
+
+    function choose(index: int) {
+        if index >= 0 && index < root.options.length && index != root.current-index {
+            root.current-index = index;
+            root.selected(index);
+            root.reveal-current();
+        }
+    }
+
+    // Keeps the current option inside the open menu's viewport.
+    function reveal-current() {
+        let first = root.current-index == 0;
+        let last = root.current-index == root.options.length - 1;
+        let row-top = root.menu-padding + root.current-index * root.row-height - (first ? root.menu-padding : 0px);
+        let row-bottom = root.menu-padding + (root.current-index + 1) * root.row-height + (last ? root.menu-padding : 0px);
+        if row-top < -root.menu-scroll-y {
+            root.menu-scroll-y = -row-top;
+        } else if row-bottom > -root.menu-scroll-y + root.menu-height {
+            root.menu-scroll-y = -(row-bottom - root.menu-height);
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+        alignment: center;
+        Text {
+            text: root.options[root.current-index];
+            color: Theme.accent;
+            font-size: 17px;
+            vertical-alignment: center;
+        }
+
+        ChevronsIcon {
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    Rectangle {
+        x: -4px;
+        y: -2px;
+        width: parent.width + 8px;
+        height: parent.height + 4px;
+        border-radius: 8px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.open();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.UpArrow {
+                root.choose(root.current-index - 1);
+                return accept;
+            } else if event.text == Key.DownArrow {
+                root.choose(root.current-index + 1);
+                return accept;
+            } else if event.text == " " || event.text == Key.Return {
+                root.open();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    popup := PopupWindow {
+        x: 0px;
+        y: root.height + 6px;
+        width: max(root.width, 200px);
+        height: root.menu-height;
+        close-policy: close-on-click-outside;
+        forward-focus: popup-focus;
+
+        popup-focus := FocusScope {
+            key-pressed(event) => {
+                if event.text == Key.UpArrow {
+                    root.choose(root.current-index - 1);
+                    return accept;
+                } else if event.text == Key.DownArrow {
+                    root.choose(root.current-index + 1);
+                    return accept;
+                } else if event.text == Key.Escape || event.text == Key.Return || event.text == " " {
+                    popup.close();
+                    return accept;
+                }
+                return reject;
+            }
+
+            Rectangle {
+                background: Theme.menu-background;
+                border-radius: 14px;
+                border-width: 1phx;
+                border-color: Theme.separator;
+
+                Flickable {
+                    content-height: root.menu-content-height;
+                    content-y <=> root.menu-scroll-y;
+
+                    for option[index] in root.options: Rectangle {
+                        x: 0px;
+                        y: root.menu-padding + index * root.row-height;
+                        width: parent.width;
+                        height: root.row-height;
+
+                        // Inset highlight, so it never pokes out of the rounded corners.
+                        Rectangle {
+                            x: 6px;
+                            width: parent.width - 12px;
+                            border-radius: 8px;
+                            background: item-touch.has-hover ? Theme.menu-highlight : transparent;
+                        }
+
+                        if index == root.current-index: CheckIcon {
+                            x: 16px;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        Text {
+                            x: 38px;
+                            width: parent.width - 52px;
+                            height: parent.height;
+                            text: option;
+                            color: Theme.label;
+                            font-size: 17px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+
+                        item-touch := TouchArea {
+                            clicked => {
+                                root.choose(index);
+                                popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// `.pickerStyle(.segmented)`
+export component SegmentedControl inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current-index;
+    callback selected(int);
+
+    property <length> segment-width: (root.width - 4px) / root.options.length;
+
+    height: 32px;
+    border-radius: 9px;
+    background: Theme.segmented-background;
+    forward-focus: focus;
+    accessible-role: tab-list;
+
+    Rectangle {
+        x: 2px + root.current-index * root.segment-width;
+        y: 2px;
+        width: root.segment-width;
+        height: root.height - 4px;
+        border-radius: 7px;
+        background: Theme.segmented-selected;
+        border-width: 1phx;
+        border-color: Theme.segmented-selected-border;
+        animate x {
+            duration: 150ms;
+            easing: ease-in-out;
+        }
+    }
+
+    for option[index] in root.options: Rectangle {
+        x: 2px + index * root.segment-width;
+        width: root.segment-width;
+        height: root.height;
+        accessible-role: tab;
+        accessible-label: option;
+        accessible-checkable: true;
+        accessible-checked: index == root.current-index;
+        accessible-action-default => {
+            root.current-index = index;
+            root.selected(index);
+        }
+
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: option;
+            font-size: 13px;
+            font-weight: index == root.current-index ? 600 : 400;
+            color: Theme.label;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
+
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.current-index = index;
+                root.selected(index);
+            }
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.LeftArrow && root.current-index > 0 {
+                root.current-index -= 1;
+                root.selected(root.current-index);
+                return accept;
+            } else if event.text == Key.RightArrow && root.current-index < root.options.length - 1 {
+                root.current-index += 1;
+                root.selected(root.current-index);
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A slider from 0 to 100 in steps of 1.
+export component WeightSlider inherits Rectangle {
+    in-out property <float> value;
+    callback changed(float);
+
+    property <length> thumb-size: 28px;
+    property <length> travel: root.width - root.thumb-size;
+
+    height: 28px;
+    forward-focus: focus;
+    accessible-role: slider;
+    accessible-value: Math.round(root.value);
+    accessible-value-minimum: 0;
+    accessible-value-maximum: 100;
+    accessible-value-step: 1;
+    accessible-action-increment => {
+        root.nudge(1);
+    }
+    accessible-action-decrement => {
+        root.nudge(-1);
+    }
+
+    function set-value(new-value: float) {
+        if new-value != root.value {
+            root.value = new-value;
+            root.changed(new-value);
+        }
+    }
+
+    function nudge(delta: float) {
+        root.set-value(Math.clamp(Math.round(root.value) + delta, 0, 100));
+    }
+
+    function set-from-x(x: length) {
+        root.set-value(Math.round(Math.clamp((x - root.thumb-size / 2) / root.travel, 0, 1) * 100));
+    }
+
+    Rectangle {
+        x: 0px;
+        y: (root.height - 4px) / 2;
+        width: root.width;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.fill;
+    }
+
+    // Fill from the left edge up to the thumb.
+    Rectangle {
+        x: 0px;
+        y: (root.height - 4px) / 2;
+        width: root.thumb-size / 2 + root.travel * root.value / 100;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
+    // The software renderer draws no shadows, so the thumb gets a soft ring and a
+    // hairline border to stand out from a white background.
+    Rectangle {
+        x: root.travel * root.value / 100 - 1px;
+        y: -1px;
+        width: root.thumb-size + 2px;
+        height: root.thumb-size + 2px;
+        border-radius: (root.thumb-size + 2px) / 2;
+        background: Theme.thumb-ring;
+    }
+
+    Rectangle {
+        x: root.travel * root.value / 100;
+        width: root.thumb-size;
+        height: root.thumb-size;
+        border-radius: root.thumb-size / 2;
+        background: #ffffff;
+        border-width: 1phx;
+        border-color: Theme.thumb-border;
+    }
+
+    Rectangle {
+        x: root.travel * root.value / 100 - 3px;
+        y: -3px;
+        width: root.thumb-size + 6px;
+        height: root.thumb-size + 6px;
+        border-radius: (root.thumb-size + 6px) / 2;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                root.set-from-x(touch.mouse-x);
+            }
+        }
+        moved => {
+            if touch.pressed {
+                root.set-from-x(touch.mouse-x);
+            }
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.LeftArrow || event.text == Key.DownArrow {
+                root.nudge(-1);
+                return accept;
+            } else if event.text == Key.RightArrow || event.text == Key.UpArrow {
+                root.nudge(1);
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
