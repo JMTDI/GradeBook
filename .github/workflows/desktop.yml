@@ -1,0 +1,407 @@
+name: Desktop app
+
+# Builds, tests and packages GradeBook for Windows, macOS and Linux.
+#
+# Every push and pull request builds the installers and keeps them as downloads on the run page.
+#
+# To publish a release, run this workflow by hand (Actions > Desktop app > Run workflow) and
+# type the version. It builds that version for all three systems, then publishes a GitHub
+# release named v<version> with the installers, their checksums and release notes written
+# from the commits since the previous release. See "Release a new version" in the README.
+
+on:
+  push:
+    branches: [main, desktop-app]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build and release, like 1.2.0"
+        type: string
+        required: true
+      publish:
+        description: "Publish a GitHub release (untick to only build, and preview the notes in the run summary)"
+        type: boolean
+        default: true
+      prerelease:
+        description: "Mark the release as a pre-release"
+        type: boolean
+        default: false
+      draft:
+        description: "Create the release as a draft, to read and edit the notes before publishing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # A new push replaces the build of an older one. A manual run, which may be a release,
+  # is never cancelled.
+  group: desktop-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Work out the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.version }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          # A manual run builds the version that was typed in (a pasted "v1.2.0 " works too).
+          # Any other run builds the version in Cargo.toml.
+          version="${REQUESTED//[[:space:]]/}"
+          version="${version#v}"
+          if [ -z "$version" ]; then
+            version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          fi
+          pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          if ! [[ $version =~ $pattern ]]; then
+            echo "::error title=Not a version::'$version' is not a version like 1.2.0"
+            exit 1
+          fi
+
+          # Only a manual run with "Publish" ticked makes a release.
+          publish=false
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$PUBLISH" = true ]; then
+            publish=true
+          fi
+
+          # Stop now, not after the builds, if this version has been released before.
+          if [ "$publish" = true ]; then
+            tags=$(git ls-remote --tags origin "refs/tags/v$version")
+            releases=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')
+            if [ -n "$tags" ] || grep -qxF "v$version" <<< "$releases"; then
+              echo "::error title=Already released::v$version already exists. Run the workflow again with a newer version."
+              exit 1
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          {
+            echo "### GradeBook $version"
+            if [ "$publish" = true ]; then
+              echo "Building the installers, then publishing them as the release **v$version**."
+            else
+              echo "Building the installers only. Nothing will be published."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check that the release notes can be written
+        run: |
+          # A dry run with made-up installers, so a mistake in the script shows up on every
+          # push and not only after a whole release has been built.
+          fake="$RUNNER_TEMP/installers"
+          mkdir -p "$fake"
+          for name in GradeBook-9.9.9-windows-x64-setup.exe GradeBook-9.9.9-macos-universal.dmg \
+                      gradebook_9.9.9-1_amd64.deb GradeBook-9.9.9-x86_64.AppImage; do
+            head -c 1024 /dev/zero > "$fake/$name"
+          done
+          python3 packaging/release-notes.py --version 9.9.9 --repo "$GITHUB_REPOSITORY" \
+            --installers "$fake" --output "$RUNNER_TEMP/notes.md"
+          grep -q "Downloads" "$RUNNER_TEMP/notes.md"
+
+  linux:
+    name: Linux (.deb and AppImage)
+    needs: prepare
+    # The oldest runner we use: binaries built here run on newer distributions, not the
+    # other way around (the glibc version they need is fixed at build time).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set the version
+        run: bash packaging/set-version.sh "$VERSION"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig1-dev dpkg-dev \
+            xvfb xdotool imagemagick \
+            libx11-6 libx11-xcb1 libxcb1 libxcb-xkb1 libxcursor1 libxext6 libxfixes3 libxi6 libxrender1 \
+            libxkbcommon0 libxkbcommon-x11-0
+
+      # Skipped for manual runs: a lint added to a newer stable Rust shouldn't block a release.
+      - name: Check formatting and lints
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Start the app under a virtual display
+        run: |
+          mkdir -p target/ci
+          reported=$(./target/release/gradebook --version)
+          echo "$reported"
+          if [ "$reported" != "GradeBook $VERSION" ]; then
+            echo "::error::The app says '$reported' but this build is version $VERSION"
+            exit 1
+          fi
+          packaging/linux/smoke-test.sh target/release/gradebook target/ci/linux-window.png
+
+      - name: Build the .deb
+        run: |
+          cargo install cargo-deb --locked --version 3.8.0
+          cargo deb --no-build
+          mkdir -p dist
+          cp target/debian/*.deb dist/
+          deb_version=$(dpkg-deb --field dist/*.deb Version)
+          if [ "$deb_version" != "$VERSION-1" ]; then
+            echo "::error::The .deb is version $deb_version but this build is version $VERSION"
+            exit 1
+          fi
+
+      - name: Build the AppImage
+        run: |
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          APPIMAGETOOL="$PWD/appimagetool" packaging/linux/build-appimage.sh
+
+      - name: Start the AppImage under a virtual display
+        run: APPIMAGE_EXTRACT_AND_RUN=1 packaging/linux/smoke-test.sh dist/GradeBook-*.AppImage
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-linux
+          path: dist/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-linux
+          path: |
+            target/tmp/screenshots/*.png
+            target/ci/*.png
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows (installer)
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set the version
+        run: bash packaging/set-version.sh "$VERSION"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Check the version in the program's properties
+        shell: pwsh
+        run: |
+          $shown = (Get-Item ./target/release/gradebook.exe).VersionInfo.ProductVersion
+          if (-not $shown.StartsWith($env:VERSION)) {
+            throw "gradebook.exe says version '$shown' but this build is version $env:VERSION"
+          }
+
+      - name: Start the app
+        shell: pwsh
+        run: |
+          $env:GRADEBOOK_DATA_DIR = Join-Path $env:RUNNER_TEMP "gradebook-data"
+          $app = Start-Process -FilePath "./target/release/gradebook.exe" -PassThru
+          Start-Sleep -Seconds 5
+          if ($app.HasExited) { throw "GradeBook exited with code $($app.ExitCode) right after starting" }
+          Stop-Process -Id $app.Id
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          }
+          & $makensis "/DVERSION=$env:VERSION" "/DROOT=$($PWD.Path)" packaging/windows/installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-windows
+          path: target/tmp/screenshots/*.png
+          if-no-files-found: ignore
+
+  macos:
+    name: macOS (universal .dmg)
+    needs: prepare
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set the version
+        run: bash packaging/set-version.sh "$VERSION"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test
+
+      - name: Build for Apple Silicon and Intel
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Start the app
+        run: |
+          export GRADEBOOK_DATA_DIR="$RUNNER_TEMP/gradebook-data"
+          ./target/aarch64-apple-darwin/release/gradebook &
+          pid=$!
+          sleep 5
+          if ! kill -0 "$pid" 2> /dev/null; then
+            echo "GradeBook exited right after starting"
+            exit 1
+          fi
+          kill "$pid"
+
+      - name: Build the .app and .dmg
+        run: |
+          packaging/macos/build-dmg.sh
+          lipo -info dist/macos/GradeBook.app/Contents/MacOS/gradebook
+          shown=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" dist/macos/GradeBook.app/Contents/Info.plist)
+          if [ "$shown" != "$VERSION" ]; then
+            echo "::error::The app bundle says version $shown but this build is version $VERSION"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots-macos
+          path: target/tmp/screenshots/*.png
+          if-no-files-found: ignore
+
+  release:
+    name: Release notes and release
+    # Every manual run writes the notes (shown in the run summary). Only one with "Publish"
+    # ticked goes on to publish them.
+    if: github.event_name == 'workflow_dispatch'
+    needs: [prepare, linux, windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The notes list the commits since the previous release, so they need the history.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: installers
+
+      - name: Write the release notes
+        run: |
+          ls -l installers
+          python3 packaging/release-notes.py --version "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --installers installers --output notes.md
+          echo "::group::The release notes"
+          cat notes.md
+          echo "::endgroup::"
+
+      - name: Publish the release
+        if: needs.prepare.outputs.publish == 'true'
+        env:
+          PRERELEASE: ${{ inputs.prerelease }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GradeBook $VERSION" --notes-file notes.md)
+          if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+          if [ "$DRAFT" = true ]; then args+=(--draft); fi
+          url=$(gh release create "v$VERSION" installers/* "${args[@]}")
+          echo "Published $url"
+          if [ "$DRAFT" = true ]; then
+            heading="📝 Draft created: [GradeBook $VERSION]($url). Read it, then publish it from the Releases page."
+          else
+            heading="🚀 Published: [GradeBook $VERSION]($url)"
+          fi
+          {
+            echo "## $heading"
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preview the release notes
+        if: needs.prepare.outputs.publish != 'true'
+        run: |
+          {
+            echo "## 👀 Release notes for v$VERSION, as a preview"
+            echo
+            echo "> Nothing was published, because this run was started with *Publish* unticked."
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"

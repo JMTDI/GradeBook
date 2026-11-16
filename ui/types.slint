@@ -1,0 +1,32 @@
+export struct ChipData {
+    id: string,
+    value: string,
+    letter: string,
+    // 0 = homework, 1 = test, 2 = quiz (the order of `GradeType::ALL`)
+    kind: int,
+}
+
+export struct StudentRowData {
+    id: string,
+    name: string,
+    // What was typed in this student's grade field, kept across filter changes.
+    draft: string,
+    chips: [ChipData],
+    // "85.3 B", or "" when the student has no usable average.
+    average: string,
+}
+
+export struct StudentItem {
+    id: string,
+    name: string,
+    grade: string,
+}
+
+export struct AlertData {
+    visible: bool,
+    title: string,
+    message: string,
+    // Empty for a plain OK alert.
+    confirm-label: string,
+    destructive: bool,
+}
