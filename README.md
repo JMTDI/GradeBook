@@ -117,8 +117,8 @@ GradeBook saves after every change, in `gradebook.json` in:
 
 | System | Folder |
 |---|---|
-| Windows | `%APPDATA%\JMTDI\GradeBook\data` |
-| macOS | `~/Library/Application Support/io.github.JMTDI.GradeBook` |
+| Windows | `%APPDATA%\jmtditech\gradebook\data` |
+| macOS | `~/Library/Application Support/com.jmtditech.gradebook` |
 | Linux | `~/.local/share/gradebook` |
 
 `gradebook --data-dir` prints the exact folder on Linux (on macOS run
@@ -196,8 +196,56 @@ makensis /DVERSION=1.0.0 /DROOT=%CD% packaging\windows\installer.nsi
 `packaging/linux/smoke-test.sh <binary>` starts a built binary under a virtual X display
 (`xvfb-run`) and checks that its window appears and stays up.
 
-To publish, bump `version` in `Cargo.toml` and push a tag named `v<version>`. The
-workflow builds everything and attaches the installers to a GitHub release.
+To publish a release, see *Release a new version* below.
+
+</details>
+
+<details>
+<summary><b>Release a new version</b></summary>
+
+A release is made by hand, and you choose its version number:
+
+1. On GitHub, open **Actions**, pick **Desktop app** in the list on the left and click **Run workflow**.
+2. Type the version: three numbers, like `1.2.0`.
+3. Click the green **Run workflow** button.
+
+The workflow builds the installers on Windows, macOS and Linux, checks that each one reports the
+version you typed, then publishes a GitHub release named `v1.2.0` with the four installers, a
+`SHA256SUMS.txt` file and release notes that it writes itself. If anything fails, nothing is
+published. Pushes and pull requests build the installers too, but publish nothing: find them
+under **Artifacts** on the run's page.
+
+The other choices in the form:
+
+| Choice | What it does |
+|---|---|
+| **Publish a GitHub release** | Untick it to only build and read the release notes in the run summary. Nothing is released. |
+| **Mark the release as a pre-release** | Flags the release as a pre-release, so it isn't shown as the latest one. |
+| **Create the release as a draft** | Creates the release unpublished, so you can read and edit the notes before you publish it. |
+
+From a terminal: `gh workflow run desktop.yml -f version=1.2.0` (add `-f prerelease=true`,
+`-f draft=true` or `-f publish=false` for the other choices).
+
+**The release notes** list the commits since the previous release (the newest version tag below the
+one you're releasing), under a table of download links and above a list of SHA-256 checksums. Each
+commit goes under ✨ What's new, 🎨 Improvements, 🐛 Fixes, 📚 Documentation, 🏗️ Build and
+packaging, ✅ Tests or 🔧 Other changes, so the first words of a commit message matter: *Add…* lands
+under What's new, *Fix…* under Fixes, and *Make…* or *Update…* under Improvements. Prefixes such as
+`feat:`, `fix:` and `docs:` work too. A commit that only touches the README, `docs/`, `tests/` or
+the build files goes under Documentation, Tests or Build and packaging. Put `[skip notes]` in a
+commit message to leave it out; merge commits are never listed.
+
+Good to know:
+
+- **The button appears once this workflow is on the default branch.** After that, *Use workflow
+  from* chooses the branch to release, and the release is that branch's latest commit.
+- **The version isn't saved in the code.** The workflow sets it while building, so `Cargo.toml`
+  keeps the version used for local builds, and the `v1.2.0` tag points to a commit that doesn't say
+  1.2.0. To build a version on your own computer, run `packaging/set-version.sh 1.2.0` first (it
+  edits `Cargo.toml` and `Cargo.lock`).
+- **A version is released once.** If its tag or release already exists, the run stops straight away.
+- **The app id** is `com.jmtditech.gradebook`. It is set in `src/lib.rs` and in each installer's
+  files, and `cargo test` fails if they disagree, so change them together.
 
 </details>
 
@@ -220,6 +268,7 @@ src/        model.rs, calc.rs, book.rs, view.rs  the gradebook logic (no UI)
 ui/         *.slint                              the screens and controls
 tests/      interaction.rs, screenshots.rs       headless UI tests
 packaging/  linux/, macos/, windows/             installers
+            set-version.sh, release-notes.py     used by the release workflow
 assets/     icons/                               the app icons
 examples/   make_icons.rs                        regenerates assets/icons
 docs/       screenshots/, demo-*.gif             the images in this README

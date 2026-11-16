@@ -11,7 +11,7 @@ cd "$(dirname "$0")/../.."
 
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 arch=$(uname -m)
-id=io.github.JMTDI.GradeBook
+id=com.jmtditech.gradebook
 appdir=target/appimage/GradeBook.AppDir
 output=dist/GradeBook-$version-$arch.AppImage
 

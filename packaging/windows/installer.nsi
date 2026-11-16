@@ -6,7 +6,7 @@
 ;
 ; Writes dist/GradeBook-<version>-windows-x64-setup.exe (create dist first). It installs
 ; for the current user only, so no administrator rights are needed. Uninstalling keeps
-; the gradebook data in %APPDATA%\JMTDI\GradeBook.
+; the gradebook data in %APPDATA%\jmtditech\gradebook.
 
 Unicode true
 !include "MUI2.nsh"
@@ -27,12 +27,14 @@ Unicode true
 
 !define NAME "GradeBook"
 !define PUBLISHER "JMTDI"
-!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NAME}"
+; The package id, which names this app's registry entries. It must match APP_ID in src/lib.rs.
+!define APP_ID "com.jmtditech.gradebook"
+!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
 
 Name "${NAME}"
 OutFile "${OUTFILE}"
 InstallDir "$LOCALAPPDATA\Programs\${NAME}"
-InstallDirRegKey HKCU "Software\${NAME}" "InstallDir"
+InstallDirRegKey HKCU "Software\${APP_ID}" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 BrandingText "${NAME} ${VERSION}"
@@ -59,7 +61,7 @@ Section "Install"
     CreateShortcut "$SMPROGRAMS\${NAME}.lnk" "$INSTDIR\gradebook.exe"
 
     ; Remember the folder, and list the app under "Apps & features".
-    WriteRegStr HKCU "Software\${NAME}" "InstallDir" "$INSTDIR"
+    WriteRegStr HKCU "Software\${APP_ID}" "InstallDir" "$INSTDIR"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${NAME}"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${PUBLISHER}"
@@ -79,5 +81,5 @@ Section "Uninstall"
 
     Delete "$SMPROGRAMS\${NAME}.lnk"
     DeleteRegKey HKCU "${UNINSTALL_KEY}"
-    DeleteRegKey HKCU "Software\${NAME}"
+    DeleteRegKey HKCU "Software\${APP_ID}"
 SectionEnd

@@ -50,12 +50,23 @@ impl From<serde_json::Error> for StoreError {
 }
 
 /// Where the data file lives: `$GRADEBOOK_DATA_DIR` if set (handy for portable use
-/// and tests), otherwise the platform's per-user application data directory.
+/// and tests), otherwise the platform's per-user application data directory, named after
+/// [`crate::APP_ID`].
 pub fn default_data_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("GRADEBOOK_DATA_DIR").filter(|dir| !dir.is_empty()) {
         return Some(PathBuf::from(dir));
     }
-    directories::ProjectDirs::from("io.github", "JMTDI", "GradeBook").map(|dirs| dirs.data_dir().to_path_buf())
+    let (qualifier, organization, application) = id_parts(crate::APP_ID)?;
+    directories::ProjectDirs::from(qualifier, organization, application).map(|dirs| dirs.data_dir().to_path_buf())
+}
+
+/// Splits a reverse-DNS id like `com.jmtditech.gradebook` into the three names the
+/// `directories` crate builds a folder from: `com.jmtditech.gradebook` in
+/// `~/Library/Application Support` on macOS, `jmtditech\gradebook\data` in `%APPDATA%` on
+/// Windows, and `gradebook` in `~/.local/share` on Linux.
+fn id_parts(id: &str) -> Option<(&str, &str, &str)> {
+    let mut parts = id.splitn(3, '.');
+    Some((parts.next()?, parts.next()?, parts.next()?))
 }
 
 #[derive(Debug)]
@@ -233,6 +244,21 @@ mod tests {
             grades: vec![grade],
             ..BackupData::default()
         }
+    }
+
+    #[test]
+    fn the_data_folder_is_named_after_the_app_id() {
+        assert_eq!(
+            id_parts("com.jmtditech.gradebook"),
+            Some(("com", "jmtditech", "gradebook"))
+        );
+        assert_eq!(id_parts("a.b.c.d"), Some(("a", "b", "c.d")), "the rest stays together");
+        assert_eq!(id_parts("gradebook"), None);
+        assert_eq!(id_parts("jmtditech.gradebook"), None);
+        assert!(
+            id_parts(crate::APP_ID).is_some(),
+            "the real id must split, or there is nowhere to save"
+        );
     }
 
     #[test]
