@@ -43,9 +43,9 @@ Download the installer for your system from the [Releases page](https://github.c
 
 | System | File | How to install |
 |---|---|---|
-| **Windows** 10/11 (64-bit) | `GradeBook-<version>-windows-x64-setup.exe` | Run it. It installs for your user only, so no administrator rights are needed. |
-| **macOS** 11+ (Apple Silicon and Intel) | `GradeBook-<version>-macos-universal.dmg` | Open it and drag GradeBook to Applications. |
-| **Debian, Ubuntu** and derivatives | `gradebook_<version>-1_amd64.deb` | `sudo apt install ./gradebook_<version>-1_amd64.deb` |
+| **Windows** 10/11 (64-bit) | `GradeBook-1.0.0-windows-x64-setup.exe` | Run it. It installs for your user only, so no administrator rights are needed. |
+| **macOS** 11+ (Apple Silicon and Intel) | `GradeBook-1.0.0-macos-universal.dmg` | Open it and drag GradeBook to Applications. |
+| **Debian, Ubuntu** and derivatives | `gradebook_1.0.0-1_amd64.deb` | `sudo apt install ./gradebook_1.0.0-1_amd64.deb` |
 | **Any other 64-bit Linux** | `GradeBook-<version>-x86_64.AppImage` | `chmod +x` it and run it. If it doesn't start, install `libfuse2` or run it with `--appimage-extract-and-run`. |
 
 > [!NOTE]
