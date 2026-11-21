@@ -1705,6 +1705,7 @@ dependencies = [
 name = "gradebook"
 version = "1.0.0"
 dependencies = [
+ "chrono",
  "directories",
  "i-slint-backend-testing",
  "png",

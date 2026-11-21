@@ -45,6 +45,9 @@ name = "gradebook"
 path = "src/main.rs"
 
 [dependencies]
+# Local dates for the backup names and the printed report. Slint already builds it with the
+# same feature, so this adds no package.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 directories = "6.0.0"
 rfd = "0.18.0"
 serde = { version = "1.0.229", features = ["derive"] }
