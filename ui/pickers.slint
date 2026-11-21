@@ -1,0 +1,34 @@
+import { Backend } from "backend.slint";
+import { MenuPicker } from "controls.slint";
+
+// The Grade / Period / Subject pickers: the class that the Grades and Insights screens show.
+// Both screens use the same properties, so they always show the same class.
+export component ClassPickers inherits HorizontalLayout {
+    padding: 16px;
+    spacing: 8px;
+    alignment: center;
+
+    MenuPicker {
+        options: Backend.grade-level-options;
+        current-index <=> Backend.grade-level-index;
+        selected(index) => {
+            Backend.filters-changed();
+        }
+    }
+
+    MenuPicker {
+        options: Backend.period-options;
+        current-index <=> Backend.period-index;
+        selected(index) => {
+            Backend.filters-changed();
+        }
+    }
+
+    MenuPicker {
+        options: Backend.subject-options;
+        current-index <=> Backend.subject-index;
+        selected(index) => {
+            Backend.filters-changed();
+        }
+    }
+}

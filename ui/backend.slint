@@ -1,39 +1,166 @@
-import { StudentRowData, StudentItem, AlertData } from "types.slint";
+import {
+    AlertData,
+    CategoryRow,
+    InsightsData,
+    NameItem,
+    ReportRowData,
+    StudentItem,
+    StudentRowData,
+    ToastData
+} from "types.slint";
 
 // Everything the UI shows and every action it can trigger. The Rust side fills
 // the `in` properties and implements the callbacks.
 export global Backend {
-    // Picker options.
+    // Picker options. The grade levels and subjects can be added to, the periods can't.
     in property <[string]> grade-level-options;
     in property <[string]> period-options;
     in property <[string]> subject-options;
+    // Homework, Test and Quiz, then the categories that were added.
+    in property <[string]> category-names;
 
-    // Grades screen.
+    // The class that the Grades and Insights screens show.
     in-out property <int> grade-level-index: 0;
     in-out property <int> period-index: 0;
     in-out property <int> subject-index: 7;
-    // Shared by every row: the position in `GradeType::ALL` (0 = homework, 1 = test,
-    // 2 = quiz). The Rust side picks the starting choice.
+    callback filters-changed();
+
+    // Grades screen.
+    // Shared by every row: the position in `category-names`. The Rust side picks the
+    // starting choice.
     in-out property <int> grade-type: 0;
     in property <[StudentRowData]> rows;
     in property <string> class-average;
-    callback filters-changed();
+    // The legend above the rows: "Homework", "Tests", "Quizzes", then the added categories.
+    in property <[string]> legend;
     callback add-grade(string, string) -> bool;
     callback delete-grade(string);
+    callback edit-grade(string);
+    callback open-needed(string);
+    callback open-report(string);
     callback draft-edited(string, string);
     pure callback sanitize-grade(string) -> string;
     pure callback is-blank(string) -> bool;
+    pure callback is-valid-score(string) -> bool;
 
-    // Settings screen.
+    // Students screen.
     in property <[StudentItem]> students;
-    in-out property <float> test-weight: 50;
-    in-out property <float> quiz-weight: 17;
-    in-out property <float> homework-weight: 33;
-    callback weights-changed();
+    // Where the grade level of a new student is picked.
+    in-out property <int> new-student-level: 0;
     callback add-student(string, int);
     callback delete-student(string);
+    callback edit-student(string);
+    callback open-paste-list();
+
+    // Insights screen.
+    in property <InsightsData> insights;
+    // The Insights screen lists the students whose average is below this.
+    in-out property <float> attention-below: 70;
+    callback attention-changed();
+
+    // Settings screen: weights, in all subjects or in one.
+    in property <[string]> weight-scope-options;
+    in-out property <int> weight-scope-index: 0;
+    in property <string> weight-scope-note;
+    in property <bool> weight-scope-own;
+    in property <[CategoryRow]> weight-rows;
+    in property <float> weights-total;
+    callback weight-scope-changed();
+    callback weight-changed(int, float);
+    callback drop-lowest-changed(int, bool);
+    callback reset-scope-weights();
+
+    // Settings screen: categories, subjects and grade levels that were added.
+    in property <[NameItem]> custom-categories;
+    callback add-category(string) -> bool;
+    callback rename-category(int);
+    callback remove-category(int);
+    in property <[NameItem]> custom-subjects;
+    callback add-subject(string) -> bool;
+    callback rename-subject(int);
+    callback remove-subject(int);
+    in property <[NameItem]> extra-levels;
+    in property <[string]> addable-level-options;
+    in-out property <int> addable-level-index: 0;
+    callback add-level();
+    callback remove-level(int);
+
+    // Settings screen: data.
+    in property <string> data-folder;
+    in property <string> backups-summary;
     callback backup();
     callback restore();
+    callback open-data-folder();
+    callback export-scores();
+    callback start-new-year();
+
+    // Settings screen: about and updates.
+    in property <string> version;
+    // Whether GradeBook looks for a newer version each time it starts.
+    in-out property <bool> check-updates: true;
+    in property <string> update-status;
+    in property <bool> update-available;
+    // What the bar above the tabs says when there is a newer version, and whether it was sent
+    // away (until a look finds a version that wasn't known, or is asked for).
+    in property <string> update-headline;
+    in-out property <bool> update-dismissed: false;
+    callback check-updates-changed();
+    callback check-now();
+    callback open-release-page();
+    // The answer of a check that ran in the background: whether it was asked for with the
+    // button, whether it worked, and the text.
+    callback update-fetched(bool, bool, string);
+
+    // Undo and redo.
+    in property <bool> can-undo: false;
+    in property <bool> can-redo: false;
+    in property <string> undo-text;
+    in property <string> redo-text;
+    callback undo();
+    callback redo();
+    // Counted up when the control that had the keyboard is gone (a row that was deleted), so
+    // that the window gives the keyboard back to the shortcuts.
+    in-out property <int> keyboard-ticket: 0;
+    in property <ToastData> toast;
+    callback toast-action();
+
+    // The dialog that is open: 0 = none, 1 = edit a score, 2 = edit a student, 3 = paste a
+    // class list, 4 = what a student needs, 5 = report card, 6 = rename.
+    in-out property <int> dialog: 0;
+    callback close-dialog();
+    // Edit a score.
+    in property <string> edit-title;
+    in property <string> edit-value;
+    in property <int> edit-kind;
+    callback save-edit-score(string, int);
+    callback delete-edit-score();
+    // Edit a student.
+    in property <string> student-name;
+    in property <int> student-level;
+    callback save-edit-student(string, int);
+    // Paste a class list.
+    in property <int> paste-level;
+    pure callback count-names(string) -> int;
+    callback add-pasted(string, int);
+    // What a student needs.
+    in property <string> needed-title;
+    in property <string> needed-subtitle;
+    in property <[string]> needed-targets;
+    in-out property <int> needed-target: 0;
+    in-out property <int> needed-kind: 0;
+    in property <string> needed-result;
+    callback needed-changed();
+    // Report card.
+    in property <string> report-title;
+    in property <string> report-subtitle;
+    in property <[ReportRowData]> report-rows;
+    in property <ReportRowData> report-total;
+    callback report-save-csv();
+    callback report-open-printable();
+    // Rename a subject or a category.
+    in property <string> rename-title;
+    in property <string> rename-text;
+    callback save-rename(string);
 
     // Alerts and confirmations.
     in property <AlertData> alert;

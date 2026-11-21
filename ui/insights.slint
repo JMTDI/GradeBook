@@ -1,0 +1,356 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Backend } from "backend.slint";
+import { BarData, StandingData, TrendPoint } from "types.slint";
+import { Divider, WeightSlider } from "controls.slint";
+import { ClassPickers } from "pickers.slint";
+
+// A number with a caption: the class average, the best and the worst.
+component StatCard inherits Rectangle {
+    in property <string> caption;
+    in property <string> value;
+    in property <string> note;
+    in property <color> tint: Theme.label;
+
+    horizontal-stretch: 1;
+    min-width: 96px;
+    height: 88px;
+    border-radius: 12px;
+    background: Theme.card-background;
+    accessible-role: text;
+    accessible-label: root.caption + ": " + (root.value == "" ? "none" : root.value) + (root.note == "" ? "" : ", " + root.note);
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 2px;
+        alignment: center;
+
+        Text {
+            text: root.caption;
+            font-size: 12px;
+            color: Theme.gray;
+        }
+
+        Text {
+            text: root.value == "" ? "—" : root.value;
+            font-size: 20px;
+            font-weight: 700;
+            color: root.value == "" ? Theme.tertiary-label : root.tint;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.note;
+            font-size: 12px;
+            color: Theme.secondary-label;
+            overflow: elide;
+        }
+    }
+}
+
+component SectionTitle inherits Text {
+    font-size: 17px;
+    font-weight: 600;
+    color: Theme.label;
+}
+
+// One bar of the distribution: the letter, a bar as long as its share of the longest, the count.
+component BarRow inherits HorizontalLayout {
+    in property <BarData> bar;
+    in property <color> tint;
+
+    spacing: 10px;
+    height: 26px;
+
+    Text {
+        width: 24px;
+        text: root.bar.label;
+        font-size: 15px;
+        font-weight: 700;
+        color: Theme.label;
+        vertical-alignment: center;
+    }
+
+    Rectangle {
+        horizontal-stretch: 1;
+
+        Rectangle {
+            x: 0px;
+            y: (parent.height - self.height) / 2;
+            width: root.bar.count > 0 ? max(parent.width * root.bar.share, 8px) : 0px;
+            height: 16px;
+            border-radius: 5px;
+            background: root.tint;
+        }
+    }
+
+    Text {
+        width: 32px;
+        text: root.bar.count;
+        font-size: 15px;
+        color: Theme.secondary-label;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+    }
+}
+
+component StandingRow inherits HorizontalLayout {
+    in property <StandingData> standing;
+
+    height: 30px;
+    spacing: 8px;
+
+    Text {
+        horizontal-stretch: 1;
+        text: root.standing.name;
+        font-size: 17px;
+        color: Theme.label;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    Text {
+        text: root.standing.average;
+        font-size: 17px;
+        font-weight: 600;
+        color: Theme.red;
+        vertical-alignment: center;
+    }
+}
+
+// The class average of each period, as a line through the periods that have one.
+component TrendChart inherits Rectangle {
+    in property <[TrendPoint]> points;
+
+    property <length> left: 30px;
+    property <length> top: 26px;
+    property <length> plot-width: root.width - root.left - 12px;
+    property <length> plot-height: root.height - root.top - 30px;
+
+    height: 200px;
+    accessible-role: text;
+    accessible-label: "Class average by period";
+
+    // Grid lines at 0, 50 and 100, with their labels.
+    for level[i] in [100, 50, 0]: Rectangle {
+        x: root.left;
+        y: root.top + root.plot-height * i / 2 - 0.5phx;
+        width: root.plot-width;
+        height: 1phx;
+        background: Theme.separator;
+
+        Text {
+            x: -root.left;
+            y: -7px;
+            width: root.left - 6px;
+            text: level;
+            font-size: 11px;
+            color: Theme.gray;
+            horizontal-alignment: right;
+        }
+    }
+
+    // The line between a period and the next one, when both have an average. Every piece is
+    // a path of its own, in pixels: a path is scaled evenly and centred in its box, so one
+    // path stretched over the plot would not run through the points.
+    for point[i] in root.points: Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+
+        if point.has-value && root.points[i + 1].has-value: Path {
+            width: parent.width;
+            height: parent.height;
+            viewbox-width: self.width / 1px;
+            viewbox-height: self.height / 1px;
+            fill: transparent;
+            stroke: Theme.accent;
+            stroke-width: 2.5px;
+            stroke-line-cap: round;
+
+            MoveTo {
+                x: (root.left + point.x * root.plot-width) / 1px;
+                y: (root.top + point.y * root.plot-height) / 1px;
+            }
+
+            LineTo {
+                x: (root.left + root.points[i + 1].x * root.plot-width) / 1px;
+                y: (root.top + root.points[i + 1].y * root.plot-height) / 1px;
+            }
+        }
+    }
+
+    for point in root.points: Rectangle {
+        x: root.left + point.x * root.plot-width - 40px;
+        width: 80px;
+        height: root.height;
+
+        Text {
+            y: root.height - 22px;
+            width: parent.width;
+            text: point.label;
+            font-size: 12px;
+            font-weight: point.current ? 700 : 400;
+            color: point.current ? Theme.accent : Theme.gray;
+            horizontal-alignment: center;
+        }
+
+        if point.has-value: Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: root.top + point.y * root.plot-height - 5px;
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background: point.current ? Theme.accent : Theme.background;
+            border-width: 2px;
+            border-color: Theme.accent;
+        }
+
+        if point.has-value: Text {
+            y: root.top + point.y * root.plot-height - 25px;
+            width: parent.width;
+            text: point.text;
+            font-size: 11px;
+            color: Theme.label;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+export component InsightsPage inherits Rectangle {
+    VerticalLayout {
+        spacing: 12px;
+
+        ClassPickers {
+            vertical-stretch: 0;
+        }
+
+        Divider {
+            vertical-stretch: 0;
+        }
+
+        ScrollView {
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-bottom: 24px;
+                spacing: 16px;
+                alignment: start;
+
+                Text {
+                    text: Backend.insights.summary;
+                    font-size: 15px;
+                    color: Theme.gray;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    StatCard {
+                        caption: "Class Average";
+                        value: Backend.insights.class-average;
+                        tint: Theme.purple;
+                    }
+
+                    StatCard {
+                        caption: "Highest";
+                        value: Backend.insights.highest;
+                        note: Backend.insights.highest-name;
+                        tint: Theme.green;
+                    }
+
+                    StatCard {
+                        caption: "Lowest";
+                        value: Backend.insights.lowest;
+                        note: Backend.insights.lowest-name;
+                        tint: Theme.red;
+                    }
+
+                    StatCard {
+                        caption: "Median";
+                        value: Backend.insights.median;
+                        tint: Theme.blue;
+                    }
+                }
+
+                SectionTitle {
+                    text: "Letter Grades";
+                }
+
+                VerticalLayout {
+                    spacing: 2px;
+
+                    for bar[i] in Backend.insights.bars: BarRow {
+                        bar: bar;
+                        tint: [Theme.green, Theme.blue, Theme.orange, Theme.purple, Theme.gray, Theme.red][i];
+                    }
+                }
+
+                Divider { }
+
+                SectionTitle {
+                    text: "Needs Attention";
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    Text {
+                        width: 130px;
+                        text: "Average below";
+                        font-size: 17px;
+                        color: Theme.label;
+                        vertical-alignment: center;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        WeightSlider {
+                            value <=> Backend.attention-below;
+                            accessible-label: "Needs attention below";
+                            changed(new-value) => {
+                                Backend.attention-changed();
+                            }
+                        }
+                    }
+
+                    Text {
+                        width: 40px;
+                        text: Math.round(Backend.attention-below) + "%";
+                        font-size: 17px;
+                        color: Theme.label;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                    }
+                }
+
+                if Backend.insights.attention.length == 0: Text {
+                    text: Backend.insights.class-average == "" ? "Nobody has an average yet." : "Nobody is below " + Math.round(Backend.attention-below) + "%.";
+                    font-size: 15px;
+                    color: Theme.gray;
+                }
+
+                VerticalLayout {
+                    for standing in Backend.insights.attention: StandingRow {
+                        standing: standing;
+                    }
+                }
+
+                Divider { }
+
+                SectionTitle {
+                    text: "Class Average by Period";
+                }
+
+                TrendChart {
+                    points: Backend.insights.trend;
+                }
+            }
+        }
+    }
+}

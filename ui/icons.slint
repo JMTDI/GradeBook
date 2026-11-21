@@ -195,3 +195,85 @@ export component MoonIcon inherits Path {
     stroke-line-join: round;
     commands: "M 20.42 14.54 A 8.6 8.6 0 1 1 10.88 3.5 A 7.4 7.4 0 0 0 20.42 14.54 Z";
 }
+
+// `person.2` / `person.2.fill`
+export component PeopleIcon inherits Path {
+    in property <color> tint: Theme.accent;
+    in property <bool> filled: false;
+
+    width: 24px;
+    height: 24px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: root.filled ? root.tint : transparent;
+    stroke: root.tint;
+    stroke-width: 1.5px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 12.2 8 A 3.2 3.2 0 1 1 5.8 8 A 3.2 3.2 0 1 1 12.2 8 Z M 3 19.5 Q 3 14.5 9 14.5 Q 15 14.5 15 19.5 Z M 15.4 5.2 A 3 3 0 0 1 15.4 11 M 17.6 14.6 Q 21 15.2 21 19.5 H 17.2";
+}
+
+// `chart.line.uptrend.xyaxis`
+export component InsightsIcon inherits Path {
+    in property <color> tint: Theme.accent;
+    in property <bool> filled: false;
+
+    width: 24px;
+    height: 24px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: root.filled ? 2.1px : 1.5px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 3.5 3.5 V 20.5 H 20.5 M 7.5 15.5 L 11.5 11 L 14.5 13.5 L 19.5 7.5 M 16 7.5 H 19.5 V 11";
+}
+
+// `arrow.uturn.backward`
+export component UndoIcon inherits Path {
+    in property <color> tint: Theme.accent;
+
+    width: 20px;
+    height: 20px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: 1.9px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 9 5 L 4.5 9.5 L 9 14 M 4.5 9.5 H 14 A 5.25 5.25 0 0 1 14 20 H 8";
+}
+
+// `arrow.uturn.forward`
+export component RedoIcon inherits Path {
+    in property <color> tint: Theme.accent;
+
+    width: 20px;
+    height: 20px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: 1.9px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 15 5 L 19.5 9.5 L 15 14 M 19.5 9.5 H 10 A 5.25 5.25 0 0 0 10 20 H 16";
+}
+
+// `pencil`: the edit button next to a student.
+export component PencilIcon inherits Path {
+    in property <color> tint: Theme.accent;
+
+    width: 18px;
+    height: 18px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: transparent;
+    stroke: root.tint;
+    stroke-width: 1.8px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+    commands: "M 4.5 19.5 L 5.4 15.2 L 15.8 4.8 A 1.9 1.9 0 0 1 18.5 4.8 L 19.2 5.5 A 1.9 1.9 0 0 1 19.2 8.2 L 8.8 18.6 Z M 14 6.6 L 17.4 10";
+}

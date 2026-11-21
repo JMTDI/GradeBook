@@ -1,0 +1,281 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Backend } from "backend.slint";
+import { StudentItem } from "types.slint";
+import { Divider, MenuPicker, ProminentButton, RoundedField, TintedButton, VCenter } from "controls.slint";
+import { MinusCircleIcon, PencilIcon } from "icons.slint";
+
+// A row of the student list. Deleting is two steps: reveal the red "Delete" button
+// (hover the row and click the minus, or press Delete), then confirm it. The pencil, or
+// Return, edits the student.
+component StudentListRow inherits Rectangle {
+    in property <StudentItem> item;
+    in property <bool> last;
+    in property <bool> revealed;
+    callback reveal();
+    callback cancel();
+    callback remove();
+    callback edit();
+
+    height: 44px;
+    forward-focus: focus;
+    accessible-role: list-item;
+    accessible-label: root.item.name + ", " + root.item.grade;
+
+    // Whether the row is pointed at or has the keyboard focus.
+    property <bool> active: row-touch.has-hover || edit-touch.has-hover || minus-touch.has-hover || focus.has-focus;
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Delete || event.text == Key.Backspace {
+                if root.revealed {
+                    root.remove();
+                } else {
+                    root.reveal();
+                }
+                return accept;
+            } else if event.text == Key.Escape {
+                root.cancel();
+                return accept;
+            } else if event.text == Key.Return {
+                root.edit();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    row-touch := TouchArea {
+        clicked => {
+            root.cancel();
+            focus.focus();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 12px;
+        spacing: 10px;
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.item.name;
+            font-size: 17px;
+            color: Theme.label;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.item.grade;
+            font-size: 12px;
+            color: Theme.gray;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: 22px;
+            // Faint until the row is pointed at, and never hidden, so it can be found and stays
+            // reachable for assistive tech.
+            opacity: root.revealed ? 0 : (root.active ? 1 : 0.45);
+            accessible-role: button;
+            accessible-label: "Edit " + root.item.name;
+            accessible-action-default => {
+                root.edit();
+            }
+
+            PencilIcon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            edit-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.edit();
+                }
+            }
+        }
+
+        Rectangle {
+            width: 22px;
+            opacity: root.revealed ? 0 : (root.active ? 1 : 0.45);
+            accessible-role: button;
+            accessible-label: "Delete " + root.item.name;
+            accessible-action-default => {
+                root.reveal();
+            }
+
+            MinusCircleIcon { }
+
+            minus-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.reveal();
+                }
+            }
+        }
+
+        if root.revealed: VCenter {
+            width: 72px;
+
+            Rectangle {
+                height: 30px;
+                border-radius: 7px;
+                background: Theme.red;
+                accessible-role: button;
+                accessible-label: "Confirm delete " + root.item.name;
+                accessible-action-default => {
+                    root.remove();
+                }
+
+                Text {
+                    text: "Delete";
+                    color: #ffffff;
+                    font-size: 15px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.remove();
+                    }
+                }
+            }
+        }
+    }
+
+    if !root.last: Rectangle {
+        x: 16px;
+        y: parent.height - self.height;
+        width: parent.width - 16px;
+        height: 1phx;
+        background: Theme.separator;
+    }
+}
+
+export component StudentsPage inherits Rectangle {
+    property <string> revealed-id;
+
+    function add-student() {
+        if !Backend.is-blank(name-field.text) {
+            Backend.add-student(name-field.text, Backend.new-student-level);
+            name-field.text = "";
+        }
+    }
+
+    VerticalLayout {
+        padding: 16px;
+        padding-top: 56px;
+        spacing: 16px;
+
+        Text {
+            text: "Add Student";
+            font-size: 22px;
+            color: Theme.label;
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            VCenter {
+                horizontal-stretch: 1;
+                name-field := RoundedField {
+                    placeholder: "Student Name";
+                    accepted => {
+                        root.add-student();
+                    }
+                }
+            }
+
+            VCenter {
+                width: 130px;
+                horizontal-stretch: 0;
+                MenuPicker {
+                    options: Backend.grade-level-options;
+                    current-index <=> Backend.new-student-level;
+                }
+            }
+
+            VCenter {
+                horizontal-stretch: 0;
+                ProminentButton {
+                    text: "Add";
+                    enabled: !Backend.is-blank(name-field.text);
+                    clicked => {
+                        root.add-student();
+                    }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            alignment: start;
+
+            TintedButton {
+                text: "Paste a Class List";
+                clicked => {
+                    Backend.open-paste-list();
+                }
+            }
+        }
+
+        Divider { }
+
+        Text {
+            text: Backend.students.length == 0 ? "Students" : "Students (" + Backend.students.length + ")";
+            font-size: 17px;
+            font-weight: 600;
+            color: Theme.label;
+        }
+
+        if Backend.students.length == 0: Text {
+            text: "No students added yet";
+            font-size: 17px;
+            color: Theme.gray;
+        }
+
+        if Backend.students.length > 0: Rectangle {
+            vertical-stretch: 1;
+            min-height: 132px;
+            background: Theme.grouped-background;
+            clip: true;
+
+            ScrollView {
+                VerticalLayout {
+                    padding: 16px;
+                    alignment: start;
+
+                    Rectangle {
+                        border-radius: 10px;
+                        background: Theme.cell-background;
+
+                        VerticalLayout {
+                            for item[index] in Backend.students: StudentListRow {
+                                item: item;
+                                last: index == Backend.students.length - 1;
+                                revealed: root.revealed-id == item.id;
+                                reveal => {
+                                    root.revealed-id = item.id;
+                                }
+                                cancel => {
+                                    root.revealed-id = "";
+                                }
+                                remove => {
+                                    root.revealed-id = "";
+                                    Backend.delete-student(item.id);
+                                }
+                                edit => {
+                                    root.revealed-id = "";
+                                    Backend.edit-student(item.id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

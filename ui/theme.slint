@@ -9,6 +9,8 @@ export global Theme {
     out property <color> background: dark ? #000000 : #ffffff;
     out property <color> grouped-background: dark ? #000000 : #f2f2f7;
     out property <color> cell-background: dark ? #1c1c1e : #ffffff;
+    // The fill of a card on the plain background.
+    out property <color> card-background: dark ? #1c1c1e : #f2f2f7;
 
     out property <color> label: dark ? #ffffff : #000000;
     out property <color> secondary-label: dark ? #ebebf599 : #3c3c4399;
@@ -38,9 +40,18 @@ export global Theme {
     out property <color> menu-highlight: dark ? #ffffff1f : #0000000f;
     out property <color> scrim: #00000066;
 
-    // The tint of each type of grade, by its index (the order of `GradeType::ALL`):
-    // 0 = homework, 1 = test, 2 = quiz.
+    // The tint of each category, by its position in the list (the order of `GradeType::ALL`
+    // first): 0 = homework, 1 = test, 2 = quiz, then the categories that were added, which
+    // take the colours below in turn.
+    out property <[color]> extra-tints: [
+        purple,
+        orange,
+        green,
+        dark ? #64d2ff : #32ade6,
+        dark ? #ff6482 : #ff2d55,
+        dark ? #ffd60a : #c7a500
+    ];
     public pure function grade-tint(kind: int) -> color {
-        return kind == 0 ? gray : (kind == 1 ? red : blue);
+        return kind == 0 ? gray : (kind == 1 ? red : (kind == 2 ? blue : extra-tints[Math.mod(kind - 3, 6)]));
     }
 }
