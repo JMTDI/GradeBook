@@ -8,7 +8,9 @@ pub mod cli;
 pub mod model;
 pub mod prefs;
 pub mod store;
+pub mod system;
 pub mod ui;
+pub mod update;
 pub mod view;
 
 /// The app's reverse-DNS id, which everything that identifies GradeBook to the system is
