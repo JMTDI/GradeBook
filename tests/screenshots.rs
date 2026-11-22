@@ -13,11 +13,11 @@ use std::time::Duration;
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Platform, PointerEventButton, WindowAdapter, WindowEvent};
-use slint::{ComponentHandle, PhysicalSize, PlatformError, Rgb8Pixel};
+use slint::{ComponentHandle, Model, PhysicalSize, PlatformError, Rgb8Pixel, SharedString};
 use uuid::Uuid;
 
 use gradebook::app::App;
-use gradebook::model::{BackupData, GradeEntry, GradeType, Student};
+use gradebook::model::{BackupData, CustomCategory, GradeEntry, GradeType, GradingOptions, Student};
 use gradebook::prefs::Appearance;
 use gradebook::store::Store;
 use gradebook::ui::{AlertData, Backend};
@@ -128,6 +128,7 @@ fn sample_data() -> BackupData {
     ];
 
     use GradeType::{Homework, Quiz, Test};
+    let project = || GradeType::Custom("Project".into());
     let grades = vec![
         grade(&ada, "Math", 1, "96", Test),
         grade(&ada, "Math", 1, "92.5", Test),
@@ -141,13 +142,22 @@ fn sample_data() -> BackupData {
         grade(&ada, "Math", 1, "97", Homework),
         grade(&ada, "Math", 1, "100", Homework),
         grade(&ada, "Math", 1, "90", Homework),
+        grade(&ada, "Math", 1, "+5", project()),
+        grade(&ada, "Math", 1, "EX", Homework),
         grade(&grace, "Math", 1, "78", Test),
         grade(&grace, "Math", 1, "70", Quiz),
         grade(&grace, "Math", 1, "85", Homework),
+        grade(&grace, "Math", 1, "18/20", project()),
         grade(&alan, "Math", 1, "100", Test),
-        // Other subject/period: must not show up.
+        grade(&katherine, "Math", 1, "62", Test),
+        grade(&katherine, "Math", 1, "58", Quiz),
+        // Another subject: must not show up.
         grade(&alan, "Art", 1, "12", Test),
-        grade(&alan, "Math", 2, "34", Test),
+        // Another period: only the Insights screen's trend shows these.
+        grade(&ada, "Math", 2, "88", Test),
+        grade(&grace, "Math", 2, "74", Test),
+        grade(&alan, "Math", 2, "91", Test),
+        grade(&katherine, "Math", 2, "66", Test),
     ];
 
     let mut students = vec![ada, grace, alan, katherine, linus];
@@ -155,8 +165,55 @@ fn sample_data() -> BackupData {
     BackupData {
         students,
         grades,
-        ..BackupData::default()
+        test_weight: 45.0,
+        quiz_weight: 15.0,
+        homework_weight: 30.0,
+        categories: vec![CustomCategory {
+            name: "Project".into(),
+            weight: 10.0,
+        }],
+        subjects: vec!["Geography".into(), "Latin".into()],
+        grade_levels: vec![11],
+        options: GradingOptions {
+            drop_lowest: vec![Homework],
+            ..GradingOptions::default()
+        },
     }
+}
+
+/// A pointer click at a position of the window.
+fn click_at(screen: &Screen, x: f32, y: f32) {
+    let position = slint::LogicalPosition::new(x, y);
+    screen.window.dispatch_event(WindowEvent::PointerMoved { position });
+    screen.window.dispatch_event(WindowEvent::PointerPressed {
+        position,
+        button: PointerEventButton::Left,
+    });
+    screen.window.dispatch_event(WindowEvent::PointerReleased {
+        position,
+        button: PointerEventButton::Left,
+    });
+}
+
+fn scroll(screen: &Screen, y: f32) {
+    screen.window.dispatch_event(WindowEvent::PointerScrolled {
+        position: slint::LogicalPosition::new(500.0, 400.0),
+        delta_x: 0.0,
+        delta_y: y,
+    });
+}
+
+fn first_score(backend: &Backend) -> SharedString {
+    backend.get_rows().row_data(0).unwrap().chips.row_data(0).unwrap().id
+}
+
+fn student_id(backend: &Backend, name: &str) -> SharedString {
+    backend
+        .get_rows()
+        .iter()
+        .find(|row| row.name == name)
+        .unwrap_or_else(|| panic!("{name} is not on the screen"))
+        .id
 }
 
 fn screenshots_dir() -> PathBuf {
@@ -200,16 +257,7 @@ fn renders_every_screen() {
 
     // Open the "Grade" picker with a real click.
     screen.render(1000, 760, 1.0);
-    let at = slint::LogicalPosition::new(420.0, 30.0);
-    screen.window.dispatch_event(WindowEvent::PointerMoved { position: at });
-    screen.window.dispatch_event(WindowEvent::PointerPressed {
-        position: at,
-        button: PointerEventButton::Left,
-    });
-    screen.window.dispatch_event(WindowEvent::PointerReleased {
-        position: at,
-        button: PointerEventButton::Left,
-    });
+    click_at(&screen, 420.0, 30.0);
     screen.shot("grades-picker-open", 1000, 760, 1.0);
     screen.window.dispatch_event(WindowEvent::KeyPressed {
         text: slint::platform::Key::Escape.into(),
@@ -220,24 +268,87 @@ fn renders_every_screen() {
 
     app.set_appearance(Appearance::Dark);
     screen.shot("grades-dark", 1000, 760, 1.0);
-
-    // Settings tab.
     app.set_appearance(Appearance::Light);
+
+    // Students tab.
     app.set_tab(1);
+    screen.shot("students-light", 1000, 760, 1.0);
+    screen.shot("students-narrow", 540, 700, 1.0);
+    app.set_appearance(Appearance::Dark);
+    screen.shot("students-dark", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Light);
+
+    // Insights tab. It is longer than the other screens, so it is drawn on a taller window.
+    app.set_tab(2);
+    screen.shot("insights-light", 1000, 1000, 1.0);
+    screen.shot("insights-light-2x", 1000, 1000, 2.0);
+    screen.shot("insights-narrow", 540, 1000, 1.0);
+    app.set_appearance(Appearance::Dark);
+    screen.shot("insights-dark", 1000, 1000, 1.0);
+    app.set_appearance(Appearance::Light);
+
+    // Settings tab, from the top and further down.
+    app.set_tab(3);
     screen.shot("settings-light", 1000, 760, 1.0);
     screen.shot("settings-narrow", 540, 700, 1.0);
     app.set_appearance(Appearance::Dark);
     screen.shot("settings-dark", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Light);
+    screen.render(1000, 760, 1.0);
+    scroll(&screen, -900.0);
+    screen.shot("settings-lists", 1000, 760, 1.0);
+    scroll(&screen, -2000.0);
+    screen.shot("settings-data", 1000, 760, 1.0);
+    scroll(&screen, 5000.0);
+
+    // The dialogs, over the screen they are opened from.
+    app.set_tab(0);
+    let score = first_score(&backend);
+    backend.invoke_edit_grade(score);
+    screen.shot("dialog-edit-score", 1000, 760, 1.0);
+    backend.invoke_close_dialog();
+
+    app.set_tab(1);
+    backend.invoke_edit_student(student_id(&backend, "Ada Lovelace"));
+    screen.shot("dialog-edit-student", 1000, 760, 1.0);
+    backend.invoke_close_dialog();
+
+    backend.invoke_open_paste_list();
+    backend.set_paste_level(2);
+    screen.shot("dialog-paste-list", 1000, 760, 1.0);
+    backend.invoke_close_dialog();
+
+    app.set_tab(0);
+    backend.invoke_open_needed(student_id(&backend, "Grace Hopper"));
+    screen.shot("dialog-needed", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Dark);
+    screen.shot("dialog-needed-dark", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Light);
+    backend.invoke_close_dialog();
+
+    backend.invoke_open_report(student_id(&backend, "Ada Lovelace"));
+    screen.shot("dialog-report", 1000, 760, 1.0);
+    screen.shot("dialog-report-narrow", 540, 700, 1.0);
+    app.set_appearance(Appearance::Dark);
+    screen.shot("dialog-report-dark", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Light);
+    backend.invoke_close_dialog();
+
+    app.set_tab(3);
+    backend.invoke_rename_subject(0);
+    screen.shot("dialog-rename", 1000, 760, 1.0);
+    backend.invoke_close_dialog();
 
     // A grade level with no students.
-    app.set_appearance(Appearance::Light);
     app.set_tab(0);
     backend.set_grade_level_index(8);
     backend.invoke_filters_changed();
     screen.shot("grades-empty", 1000, 760, 1.0);
+    backend.set_grade_level_index(2);
+    backend.invoke_filters_changed();
 
     // An alert on top of the Settings screen.
-    app.set_tab(1);
+    app.set_tab(3);
     backend.set_alert(AlertData {
         visible: true,
         title: "Restore Backup?".into(),
@@ -248,4 +359,32 @@ fn renders_every_screen() {
         destructive: true,
     });
     screen.shot("alert-light", 1000, 760, 1.0);
+    backend.invoke_alert_dismissed();
+
+    // The bar that offers to take a change back. One render only: it goes away by itself.
+    app.set_tab(0);
+    let score = first_score(&backend);
+    backend.invoke_delete_grade(score);
+    screen.shot("toast-light", 1000, 760, 1.0);
+
+    // A newer version is out: the bar above the tabs stays until it is sent away, and the
+    // bar of a change stands above it.
+    app.receive_update_answer(
+        false,
+        Ok(r#"{"tag_name": "v9.0.0", "html_url": "https://github.com/JMTDI/GradeBook/releases/tag/v9.0.0"}"#.into()),
+    );
+    screen.shot("update-light", 1000, 760, 1.0);
+    screen.shot("update-narrow", 540, 700, 1.0);
+    app.set_appearance(Appearance::Dark);
+    screen.shot("update-dark", 1000, 760, 1.0);
+    app.set_appearance(Appearance::Light);
+    let score = first_score(&backend);
+    backend.invoke_delete_grade(score);
+    screen.shot("update-toast", 1000, 760, 1.0);
+
+    // And what Settings says about it, at the bottom of the screen.
+    app.set_tab(3);
+    screen.render(1000, 760, 1.0);
+    scroll(&screen, -5000.0);
+    screen.shot("settings-updates", 1000, 760, 1.0);
 }

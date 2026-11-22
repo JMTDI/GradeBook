@@ -4,14 +4,31 @@ import "fonts/Inter-Bold.ttf";
 
 import { Theme } from "theme.slint";
 import { Backend } from "backend.slint";
-import { Divider, ThemeToggle } from "controls.slint";
+import { Divider, ProminentButton, ThemeToggle } from "controls.slint";
+import { RoundButton } from "widgets.slint";
 import { GradesPage } from "grades.slint";
+import { StudentsPage } from "students.slint";
+import { InsightsPage } from "insights.slint";
 import { SettingsPage } from "settings.slint";
-import { BarChartIcon, GearIcon } from "icons.slint";
+import { EditScoreDialog, EditStudentDialog, NeededDialog, PasteListDialog, RenameDialog, ReportDialog } from "dialogs.slint";
+import { BarChartIcon, CrossIcon, DownloadIcon, GearIcon, InsightsIcon, PeopleIcon, RedoIcon, UndoIcon } from "icons.slint";
 
 export { Backend } from "backend.slint";
 export { Theme } from "theme.slint";
-export { AlertData, ChipData, StudentItem, StudentRowData } from "types.slint";
+export {
+    AlertData,
+    BarData,
+    CategoryRow,
+    ChipData,
+    InsightsData,
+    NameItem,
+    ReportRowData,
+    StandingData,
+    StudentItem,
+    StudentRowData,
+    ToastData,
+    TrendPoint
+} from "types.slint";
 
 // One tab of the bottom tab bar: icon above a small label.
 component TabBarItem inherits Rectangle {
@@ -103,15 +120,108 @@ component TabBar inherits Rectangle {
         }
 
         TabBarItem {
-            title: "Settings";
+            title: "Students";
             selected: root.current == 1;
             activated => {
                 root.current = 1;
             }
 
-            GearIcon {
+            PeopleIcon {
                 tint: root.current == 1 ? Theme.accent : Theme.gray;
                 filled: root.current == 1;
+            }
+        }
+
+        TabBarItem {
+            title: "Insights";
+            selected: root.current == 2;
+            activated => {
+                root.current = 2;
+            }
+
+            InsightsIcon {
+                tint: root.current == 2 ? Theme.accent : Theme.gray;
+                filled: root.current == 2;
+            }
+        }
+
+        TabBarItem {
+            title: "Settings";
+            selected: root.current == 3;
+            activated => {
+                root.current = 3;
+            }
+
+            GearIcon {
+                tint: root.current == 3 ? Theme.accent : Theme.gray;
+                filled: root.current == 3;
+            }
+        }
+    }
+}
+
+// The bar above the tabs that tells there is a newer version, until it is sent away. The window
+// gives it its height, because the bar of a change has to stand above it.
+component UpdateBar inherits Rectangle {
+    background: Theme.background;
+
+    Rectangle {
+        background: Theme.accent.with-alpha(0.1);
+    }
+
+    Divider {
+        y: 0px;
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 8px;
+        spacing: 10px;
+
+        VerticalLayout {
+            alignment: center;
+
+            DownloadIcon {
+                tint: Theme.accent;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: Backend.update-headline;
+            font-size: 15px;
+            font-weight: 600;
+            color: Theme.label;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+
+            ProminentButton {
+                text: "Download";
+                clicked => {
+                    Backend.open-release-page();
+                }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+
+            RoundButton {
+                label: "Dismiss";
+                description: "Hide this until GradeBook starts again";
+                clicked => {
+                    Backend.update-dismissed = true;
+                }
+
+                CrossIcon {
+                    tint: Theme.accent;
+                }
             }
         }
     }
@@ -257,8 +367,69 @@ component AlertOverlay inherits Rectangle {
     }
 }
 
+// The bar that appears after a change, with the one thing to do about it: take it back, or
+// look at what was found.
+component ToastBar inherits Rectangle {
+    height: 44px;
+    border-radius: 22px;
+    background: #2c2c2eee;
+    border-width: 1phx;
+    border-color: #ffffff22;
+    accessible-role: none;
+
+    HorizontalLayout {
+        padding-left: 18px;
+        padding-right: 6px;
+        spacing: 8px;
+
+        Text {
+            horizontal-stretch: 1;
+            text: Backend.toast.message;
+            font-size: 15px;
+            color: #ffffff;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                height: 32px;
+                border-radius: 16px;
+                background: touch.pressed ? #ffffff30 : (touch.has-hover ? #ffffff20 : transparent);
+                accessible-role: button;
+                accessible-label: Backend.toast.action;
+                accessible-action-default => {
+                    Backend.toast-action();
+                }
+
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 14px;
+
+                    Text {
+                        text: Backend.toast.action;
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: #a5a3ff;
+                        vertical-alignment: center;
+                    }
+                }
+
+                touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Backend.toast-action();
+                    }
+                }
+            }
+        }
+    }
+}
+
 export component MainWindow inherits Window {
-    // 0 = Grades, 1 = Settings
+    // 0 = Grades, 1 = Students, 2 = Insights, 3 = Settings
     in-out property <int> tab: 0;
 
     title: "GradeBook";
@@ -272,31 +443,173 @@ export component MainWindow inherits Window {
 
     // Both pages stay alive, so each keeps its state. A field on the
     // hidden page loses the keyboard focus by itself, which the tests check.
-    VerticalLayout {
-        Rectangle {
-            vertical-stretch: 1;
-
-            GradesPage {
-                visible: root.tab == 0;
-            }
-
-            SettingsPage {
-                visible: root.tab == 1;
+    //
+    // The scope around everything takes the undo and redo shortcuts (Cmd on a Mac). A text
+    // field keeps its own undo while it has text in it, and passes the shortcut on when it is
+    // empty (see `RoundedField`).
+    shortcuts := FocusScope {
+        KeyBinding {
+            keys: @keys(Control + Z);
+            activated => {
+                Backend.undo();
             }
         }
 
-        TabBar {
-            current <=> root.tab;
+        KeyBinding {
+            keys: @keys(Control + Shift + Z);
+            activated => {
+                Backend.redo();
+            }
+        }
+
+        KeyBinding {
+            keys: @keys(Control + Y);
+            activated => {
+                Backend.redo();
+            }
+        }
+
+        VerticalLayout {
+            Rectangle {
+                vertical-stretch: 1;
+
+                GradesPage {
+                    visible: root.tab == 0;
+                }
+
+                StudentsPage {
+                    visible: root.tab == 1;
+                }
+
+                InsightsPage {
+                    visible: root.tab == 2;
+                }
+
+                SettingsPage {
+                    visible: root.tab == 3;
+                }
+            }
+
+            if root.update-bar-visible: UpdateBar {
+                height: root.update-bar-height;
+            }
+
+            TabBar {
+                current <=> root.tab;
+            }
         }
     }
 
-    // On top of both screens, in the top-right corner.
+    // A dialog or an alert that closes takes with it the control that had the keyboard, and so
+    // does a tab that is left, and the bar about a new version when it is sent away. The scope
+    // of the shortcuts takes the keyboard back, so that Ctrl+Z goes on working.
+    property <bool> modal-open: Backend.dialog != 0 || Backend.alert.visible;
+    changed modal-open => {
+        if !root.modal-open {
+            shortcuts.focus();
+        }
+    }
+    property <bool> update-bar-visible: Backend.update-available && !Backend.update-dismissed;
+    property <length> update-bar-height: 48px;
+    changed update-bar-visible => {
+        if !root.update-bar-visible {
+            shortcuts.focus();
+        }
+    }
+    changed tab => {
+        shortcuts.focus();
+    }
+    property <int> keyboard-ticket: Backend.keyboard-ticket;
+    changed keyboard-ticket => {
+        shortcuts.focus();
+    }
+
+    init => {
+        shortcuts.focus();
+    }
+
+    // On top of the screens, in the top-left corner.
+    RoundButton {
+        x: 14px;
+        y: 12px;
+        label: "Undo";
+        description: Backend.can-undo ? Backend.undo-text : "";
+        enabled: Backend.can-undo;
+        clicked => {
+            Backend.undo();
+        }
+
+        UndoIcon { }
+    }
+
+    RoundButton {
+        x: 56px;
+        y: 12px;
+        label: "Redo";
+        description: Backend.can-redo ? Backend.redo-text : "";
+        enabled: Backend.can-redo;
+        clicked => {
+            Backend.redo();
+        }
+
+        RedoIcon { }
+    }
+
+    // And in the top-right corner.
     ThemeToggle {
         x: root.width - self.width - 14px;
         y: 12px;
         clicked => {
             Backend.toggle-appearance();
         }
+    }
+
+    if Backend.toast.visible: ToastBar {
+        width: min(460px, root.width - 32px);
+        x: (root.width - self.width) / 2;
+        y: root.height - 49px - (root.update-bar-visible ? root.update-bar-height : 0px) - 16px - self.height;
+    }
+
+    if Backend.dialog == 1: EditScoreDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Backend.dialog == 2: EditStudentDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Backend.dialog == 3: PasteListDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Backend.dialog == 4: NeededDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Backend.dialog == 5: ReportDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Backend.dialog == 6: RenameDialog {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: root.height;
     }
 
     if Backend.alert.visible: AlertOverlay {

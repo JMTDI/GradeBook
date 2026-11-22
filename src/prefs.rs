@@ -31,4 +31,43 @@ pub struct Preferences {
     /// which means following the system.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<Appearance>,
+    /// Whether to look for a newer GradeBook when the app starts. `None` is the default, which
+    /// is to look; only a choice made in Settings is written down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check_for_updates: Option<bool>,
+    /// The Insights screen lists the students whose average is below this. `None` is the
+    /// default, [`crate::view::DEFAULT_ATTENTION`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attention_below: Option<u32>,
+}
+
+impl Preferences {
+    /// Whether GradeBook looks for a newer version when it starts.
+    pub fn checks_for_updates(&self) -> bool {
+        self.check_for_updates.unwrap_or(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn looking_for_updates_is_the_default_until_it_is_turned_off() {
+        let none: Preferences = serde_json::from_str("{}").unwrap();
+        assert!(none.checks_for_updates(), "a settings file without the choice");
+        assert!(Preferences::default().checks_for_updates());
+
+        let off: Preferences = serde_json::from_str(r#"{"check_for_updates": false}"#).unwrap();
+        assert!(!off.checks_for_updates());
+        let on: Preferences = serde_json::from_str(r#"{"check_for_updates": true}"#).unwrap();
+        assert!(on.checks_for_updates());
+
+        let written = serde_json::to_string(&Preferences {
+            check_for_updates: Some(false),
+            ..Preferences::default()
+        })
+        .unwrap();
+        assert_eq!(written, r#"{"check_for_updates":false}"#);
+    }
 }

@@ -3,6 +3,9 @@
 //! The data file uses the same JSON as a backup ([`BackupData`]). A file that can't be
 //! read is moved aside (never overwritten) and reported to the caller, rather than
 //! being silently ignored.
+//!
+//! Next to it, a `backups` folder holds a copy of the data from the first start of each day
+//! (the last seven days are kept) and an archive of every school year that was ended.
 
 use std::fmt;
 use std::fs;
@@ -10,6 +13,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::model::BackupData;
@@ -19,6 +23,15 @@ pub const DATA_FILE: &str = "gradebook.json";
 
 /// The preferences (see [`Preferences`]), next to the data file.
 pub const SETTINGS_FILE: &str = "settings.json";
+
+/// The folder, next to the data file, with the automatic backups and the school-year archives.
+pub const BACKUP_DIR: &str = "backups";
+
+/// How many days of automatic backups are kept.
+pub const DAILY_BACKUPS_KEPT: usize = 7;
+
+/// A daily backup is `gradebook-<year>-<month>-<day>.json`.
+const DAILY_PREFIX: &str = "gradebook-";
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -153,6 +166,77 @@ impl Store {
         Ok(Some(copy))
     }
 
+    /// The folder the data file is in.
+    pub fn dir(&self) -> &Path {
+        match self.path.parent() {
+            Some(dir) if !dir.as_os_str().is_empty() => dir,
+            _ => Path::new("."),
+        }
+    }
+
+    pub fn backups_dir(&self) -> PathBuf {
+        self.dir().join(BACKUP_DIR)
+    }
+
+    /// Copies the data file to `backups/gradebook-<day>.json`, unless that day has a copy
+    /// already, and deletes the daily copies beyond the last [`DAILY_BACKUPS_KEPT`]. The
+    /// file is copied as it is, so a copy never "repairs" anything. Returns the new copy's
+    /// path, or `None` if there was nothing to copy or the day was covered already.
+    pub fn daily_backup(&self, day: NaiveDate) -> Result<Option<PathBuf>, StoreError> {
+        if !self.path.is_file() {
+            return Ok(None);
+        }
+        let dir = self.backups_dir();
+        let target = dir.join(format!("{DAILY_PREFIX}{day}.json"));
+        let created = if target.exists() {
+            None
+        } else {
+            fs::create_dir_all(&dir)?;
+            let tmp = dir.join(format!("{DAILY_PREFIX}{day}.json.tmp"));
+            if let Err(e) = fs::copy(&self.path, &tmp).and_then(|_| fs::rename(&tmp, &target)) {
+                let _ = fs::remove_file(&tmp);
+                return Err(e.into());
+            }
+            Some(target)
+        };
+        for (_, old) in self.daily_backups().into_iter().skip(DAILY_BACKUPS_KEPT) {
+            let _ = fs::remove_file(old);
+        }
+        Ok(created)
+    }
+
+    /// The daily backups, newest first.
+    pub fn daily_backups(&self) -> Vec<(NaiveDate, PathBuf)> {
+        let Ok(entries) = fs::read_dir(self.backups_dir()) else {
+            return Vec::new();
+        };
+        let mut found: Vec<(NaiveDate, PathBuf)> = entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let day = name.strip_prefix(DAILY_PREFIX)?.strip_suffix(".json")?;
+                let day = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
+                Some((day, entry.path()))
+            })
+            .collect();
+        found.sort_by_key(|(day, _)| std::cmp::Reverse(*day));
+        found
+    }
+
+    /// Saves `data` as `backups/school-year-<day>.json`, where it stays: unlike the daily
+    /// copies it is never deleted, and an earlier one is never overwritten.
+    pub fn archive_school_year(&self, data: &BackupData, day: NaiveDate) -> Result<PathBuf, StoreError> {
+        let dir = self.backups_dir();
+        let mut target = dir.join(format!("school-year-{day}.json"));
+        let mut counter = 2;
+        while target.exists() {
+            target = dir.join(format!("school-year-{day}-{counter}.json"));
+            counter += 1;
+        }
+        write_json_atomically(&target, data)?;
+        Ok(target)
+    }
+
     fn move_aside(&self) -> Option<PathBuf> {
         let target = self.unused_sibling("unreadable");
         fs::rename(&self.path, &target).ok().map(|_| target)
@@ -277,6 +361,7 @@ mod tests {
 
         let preferences = Preferences {
             appearance: Some(Appearance::Dark),
+            ..Preferences::default()
         };
         store.save_preferences(&preferences).unwrap();
         assert_eq!(store.load_preferences(), preferences);
@@ -447,5 +532,155 @@ mod tests {
             read_backup_file(&dir.path().join("nope.json")),
             Err(StoreError::Io(_))
         ));
+    }
+
+    #[test]
+    fn newer_preferences_are_only_written_when_they_are_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        store.save_preferences(&Preferences::default()).unwrap();
+        let text = |store: &Store| {
+            fs::read_to_string(store.settings_path())
+                .unwrap()
+                .replace([' ', '\n'], "")
+        };
+        assert_eq!(
+            text(&store),
+            "{}",
+            "a version that doesn't know them can still read the file"
+        );
+
+        let preferences = Preferences {
+            check_for_updates: Some(false),
+            attention_below: Some(75),
+            ..Preferences::default()
+        };
+        store.save_preferences(&preferences).unwrap();
+        assert_eq!(text(&store), r#"{"check_for_updates":false,"attention_below":75}"#);
+        assert_eq!(store.load_preferences(), preferences);
+    }
+
+    fn day(text: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+    }
+
+    #[test]
+    fn the_first_start_of_a_day_makes_a_backup_and_later_ones_leave_it_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        assert_eq!(store.daily_backup(day("2026-11-20")).unwrap(), None, "no data yet");
+        assert!(!store.backups_dir().exists(), "and no folder for nothing");
+
+        let morning = sample();
+        store.save(&morning).unwrap();
+        let backup = store.daily_backup(day("2026-11-20")).unwrap().unwrap();
+        assert_eq!(backup.file_name().unwrap(), "gradebook-2026-11-20.json");
+        assert_eq!(backup.parent().unwrap(), store.backups_dir());
+        assert_eq!(read_backup_file(&backup).unwrap(), morning);
+
+        // Later that day the data has changed, but the day already has its copy.
+        store.save(&BackupData::default()).unwrap();
+        assert_eq!(store.daily_backup(day("2026-11-20")).unwrap(), None);
+        assert_eq!(
+            read_backup_file(&backup).unwrap(),
+            morning,
+            "the first copy of the day is kept"
+        );
+        assert!(
+            !store.backups_dir().join("gradebook-2026-11-20.json.tmp").exists(),
+            "no temp file is left"
+        );
+    }
+
+    #[test]
+    fn a_backup_is_a_byte_for_byte_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        fs::write(store.path(), "  {\"students\": [], \"odd\": 1,\n \"testWeight\":50,\"quizWeight\":17,\"homeworkWeight\":33,\"grades\":[]}  ").unwrap();
+        let backup = store.daily_backup(day("2026-01-02")).unwrap().unwrap();
+        assert_eq!(fs::read(backup).unwrap(), fs::read(store.path()).unwrap());
+    }
+
+    #[test]
+    fn only_the_last_seven_days_of_backups_are_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        store.save(&sample()).unwrap();
+        for n in 1..=10 {
+            store.daily_backup(day(&format!("2026-02-{n:02}"))).unwrap();
+        }
+        let kept: Vec<String> = store.daily_backups().iter().map(|(d, _)| d.to_string()).collect();
+        assert_eq!(
+            kept,
+            [
+                "2026-02-10",
+                "2026-02-09",
+                "2026-02-08",
+                "2026-02-07",
+                "2026-02-06",
+                "2026-02-05",
+                "2026-02-04"
+            ],
+            "newest first"
+        );
+        assert_eq!(fs::read_dir(store.backups_dir()).unwrap().count(), 7);
+    }
+
+    #[test]
+    fn pruning_only_touches_daily_backups() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        store.save(&sample()).unwrap();
+        let archive = store.archive_school_year(&sample(), day("2020-01-01")).unwrap();
+        let note = store.backups_dir().join("notes.txt");
+        let odd = store.backups_dir().join("gradebook-not-a-date.json");
+        fs::write(&note, "mine").unwrap();
+        fs::write(&odd, "{}").unwrap();
+        for n in 1..=9 {
+            store.daily_backup(day(&format!("2026-03-{n:02}"))).unwrap();
+        }
+        assert_eq!(store.daily_backups().len(), DAILY_BACKUPS_KEPT);
+        assert!(
+            archive.exists() && note.exists() && odd.exists(),
+            "everything else stays"
+        );
+        assert!(store.path().exists(), "so does the data");
+    }
+
+    #[test]
+    fn a_school_year_archive_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        let first = sample();
+        let second = BackupData {
+            test_weight: 10.0,
+            ..sample()
+        };
+        let a = store.archive_school_year(&first, day("2027-06-01")).unwrap();
+        let b = store.archive_school_year(&second, day("2027-06-01")).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(a.file_name().unwrap(), "school-year-2027-06-01.json");
+        assert_eq!(b.file_name().unwrap(), "school-year-2027-06-01-2.json");
+        assert_eq!(read_backup_file(&a).unwrap(), first);
+        assert_eq!(read_backup_file(&b).unwrap(), second);
+        assert!(store.daily_backups().is_empty(), "an archive isn't a daily backup");
+    }
+
+    #[test]
+    fn an_archive_that_cannot_be_written_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::in_dir(dir.path());
+        // A file where the backups folder should be.
+        fs::write(store.backups_dir(), "in the way").unwrap();
+        assert!(store.archive_school_year(&sample(), day("2027-06-01")).is_err());
+        store.save(&sample()).unwrap();
+        assert!(store.daily_backup(day("2027-06-01")).is_err());
+    }
+
+    #[test]
+    fn the_data_folder_of_a_plain_file_name_is_the_current_folder() {
+        assert_eq!(Store::new("gradebook.json").dir(), Path::new("."));
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(Store::in_dir(dir.path()).dir(), dir.path());
     }
 }

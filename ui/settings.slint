@@ -1,349 +1,527 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Backend } from "backend.slint";
-import { StudentItem } from "types.slint";
+import { CategoryRow, NameItem } from "types.slint";
 import { Divider, MenuPicker, ProminentButton, RoundedField, TintedButton, VCenter, WeightSlider } from "controls.slint";
-import { DownloadIcon, MinusCircleIcon, UploadIcon } from "icons.slint";
+import { SmallButton, ToggleSwitch } from "widgets.slint";
+import { DownloadIcon, UploadIcon } from "icons.slint";
 
-// A row of the student list. Deleting is two steps: reveal the red "Delete" button
-// (hover the row and click the minus, or press Delete), then confirm it.
-component StudentListRow inherits Rectangle {
-    in property <StudentItem> item;
-    in property <bool> last;
-    in property <bool> revealed;
-    callback reveal();
-    callback cancel();
-    callback remove();
+component SectionTitle inherits Text {
+    font-size: 22px;
+    color: Theme.label;
+}
 
-    height: 44px;
-    forward-focus: focus;
-    accessible-role: list-item;
-    accessible-label: root.item.name + ", " + root.item.grade;
+// A line of small grey text under a title or a control.
+component Hint inherits Text {
+    font-size: 13px;
+    color: Theme.gray;
+    wrap: word-wrap;
+}
 
-    focus := FocusScope {
-        key-pressed(event) => {
-            if event.text == Key.Delete || event.text == Key.Backspace {
-                if root.revealed {
-                    root.remove();
-                } else {
-                    root.reveal();
-                }
-                return accept;
-            } else if event.text == Key.Escape {
-                root.cancel();
-                return accept;
-            }
-            return reject;
+// A category's weight, and whether its lowest score is left out of the average.
+component WeightRow inherits VerticalLayout {
+    in property <CategoryRow> entry;
+    callback changed(float);
+    callback drop-toggled(bool);
+
+    spacing: 4px;
+
+    HorizontalLayout {
+        spacing: 8px;
+
+        Text {
+            width: 100px;
+            text: root.entry.name + " Weight";
+            font-size: 17px;
+            color: Theme.label;
+            wrap: word-wrap;
+            vertical-alignment: center;
         }
-    }
 
-    row-touch := TouchArea {
-        clicked => {
-            root.cancel();
-            focus.focus();
+        VCenter {
+            slider := WeightSlider {
+                value: root.entry.weight;
+                accessible-label: root.entry.name + " weight";
+                changed(new-value) => {
+                    root.changed(new-value);
+                }
+            }
+        }
+
+        Text {
+            width: 40px;
+            text: Math.round(slider.value) + "%";
+            font-size: 17px;
+            color: Theme.label;
+            horizontal-alignment: right;
+            vertical-alignment: center;
         }
     }
 
     HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 12px;
+        padding-left: 108px;
         spacing: 10px;
 
-        Text {
+        Hint {
             horizontal-stretch: 1;
-            text: root.item.name;
-            font-size: 17px;
-            color: Theme.label;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        Text {
-            text: root.item.grade;
-            font-size: 12px;
-            color: Theme.gray;
+            text: "Leave out the lowest " + root.entry.name + " score";
             vertical-alignment: center;
         }
 
-        Rectangle {
-            width: 22px;
-            // Faded out rather than hidden, so it stays reachable for assistive tech.
-            opacity: !root.revealed && (row-touch.has-hover || minus-touch.has-hover || focus.has-focus) ? 1 : 0;
-            accessible-role: button;
-            accessible-label: "Delete " + root.item.name;
-            accessible-action-default => {
-                root.reveal();
-            }
-
-            MinusCircleIcon { }
-
-            minus-touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => {
-                    root.reveal();
-                }
+        ToggleSwitch {
+            checked: root.entry.drop-lowest;
+            accessible-label: "Drop lowest " + root.entry.name;
+            toggled(on) => {
+                root.drop-toggled(on);
             }
         }
-
-        if root.revealed: VCenter {
-            width: 72px;
-
-            Rectangle {
-                height: 30px;
-                border-radius: 7px;
-                background: Theme.red;
-                accessible-role: button;
-                accessible-label: "Confirm delete " + root.item.name;
-                accessible-action-default => {
-                    root.remove();
-                }
-
-                Text {
-                    text: "Delete";
-                    color: #ffffff;
-                    font-size: 15px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-
-                TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => {
-                        root.remove();
-                    }
-                }
-            }
-        }
-    }
-
-    if !root.last: Rectangle {
-        x: 16px;
-        y: parent.height - self.height;
-        width: parent.width - 16px;
-        height: 1phx;
-        background: Theme.separator;
     }
 }
 
-component WeightRow inherits HorizontalLayout {
-    in property <string> title;
-    in-out property <float> value;
-    callback changed();
+// A subject, category or grade level that was added, with what can be done to it.
+component NameRow inherits HorizontalLayout {
+    in property <NameItem> item;
+    in property <bool> editable: true;
+    callback rename();
+    callback remove();
 
-    spacing: 8px;
+    spacing: 4px;
+    height: 36px;
 
     Text {
-        width: 100px;
-        text: root.title + " Weight";
+        horizontal-stretch: 1;
+        text: root.item.name;
         font-size: 17px;
         color: Theme.label;
-        wrap: word-wrap;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    Text {
+        text: root.item.detail;
+        font-size: 12px;
+        color: Theme.gray;
         vertical-alignment: center;
     }
 
-    VCenter {
-        WeightSlider {
-            value <=> root.value;
-            accessible-label: root.title + " weight";
-            changed(new-value) => {
-                root.changed();
+    if root.editable: VCenter {
+        SmallButton {
+            text: "Rename";
+            description: "Rename " + root.item.name;
+            clicked => {
+                root.rename();
             }
         }
     }
 
-    Text {
-        width: 40px;
-        text: Math.round(root.value) + "%";
-        font-size: 17px;
-        color: Theme.label;
-        horizontal-alignment: right;
-        vertical-alignment: center;
+    VCenter {
+        SmallButton {
+            text: "Remove";
+            tint: Theme.red;
+            description: "Remove " + root.item.name;
+            clicked => {
+                root.remove();
+            }
+        }
+    }
+}
+
+// The list under an "add" field.
+component NameList inherits Rectangle {
+    in property <int> count;
+
+    visible: root.count > 0;
+    height: root.count > 0 ? list.preferred-height : 0px;
+    border-radius: 10px;
+    background: Theme.card-background;
+
+    list := VerticalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        @children
     }
 }
 
 export component SettingsPage inherits Rectangle {
-    property <int> new-grade-index: 0;
-    property <string> revealed-id;
-    property <float> total-weight: Backend.test-weight + Backend.quiz-weight + Backend.homework-weight;
+    // The buttons in the corners take the first 48 pixels. What scrolls starts below them, so
+    // that it never slides under them.
+    ScrollView {
+        y: 48px;
+        height: parent.height - 48px;
 
-    function add-student() {
-        if !Backend.is-blank(name-field.text) {
-            Backend.add-student(name-field.text, root.new-grade-index + 1);
-            name-field.text = "";
-            root.new-grade-index = 0;
-        }
-    }
+        VerticalLayout {
+            padding: 16px;
+            padding-top: 12px;
+            padding-bottom: 32px;
+            spacing: 16px;
+            alignment: start;
 
-    VerticalLayout {
-        padding: 16px;
-        padding-top: 32px;
-        spacing: 16px;
+            SectionTitle {
+                text: "Assignment Weights";
+            }
 
-        Text {
-            text: "Add Student";
-            font-size: 22px;
-            color: Theme.label;
-        }
+            HorizontalLayout {
+                spacing: 10px;
 
-        HorizontalLayout {
-            spacing: 8px;
+                Text {
+                    text: "Weights for";
+                    font-size: 17px;
+                    color: Theme.label;
+                    vertical-alignment: center;
+                }
 
-            VCenter {
-                horizontal-stretch: 1;
-                name-field := RoundedField {
-                    placeholder: "Student Name";
-                    accepted => {
-                        root.add-student();
+                VCenter {
+                    width: 190px;
+
+                    MenuPicker {
+                        options: Backend.weight-scope-options;
+                        current-index <=> Backend.weight-scope-index;
+                        selected(index) => {
+                            Backend.weight-scope-changed();
+                        }
                     }
                 }
-            }
 
-            VCenter {
-                width: 120px;
-                horizontal-stretch: 0;
-                MenuPicker {
-                    options: Backend.grade-level-options;
-                    current-index <=> root.new-grade-index;
+                Rectangle {
+                    horizontal-stretch: 1;
                 }
             }
 
-            VCenter {
-                horizontal-stretch: 0;
-                ProminentButton {
-                    text: "Add";
-                    enabled: !Backend.is-blank(name-field.text);
+            Hint {
+                text: Backend.weight-scope-note;
+            }
+
+            VerticalLayout {
+                spacing: 10px;
+
+                for entry[index] in Backend.weight-rows: WeightRow {
+                    entry: entry;
+                    changed(value) => {
+                        Backend.weight-changed(index, value);
+                    }
+                    drop-toggled(on) => {
+                        Backend.drop-lowest-changed(index, on);
+                    }
+                }
+
+                Text {
+                    text: "Total: " + Math.round(Backend.weights-total) + "%";
+                    font-size: 17px;
+                    font-weight: 700;
+                    color: Backend.weights-total == 100 ? Theme.green : Theme.red;
+                }
+            }
+
+            if Backend.weight-scope-own: HorizontalLayout {
+                alignment: start;
+
+                TintedButton {
+                    text: "Use the Default Weights";
                     clicked => {
-                        root.add-student();
+                        Backend.reset-scope-weights();
                     }
                 }
             }
-        }
 
-        Divider { }
+            Divider { }
 
-        Text {
-            text: "Students";
-            font-size: 17px;
-            font-weight: 600;
-            color: Theme.label;
-        }
+            SectionTitle {
+                text: "Categories";
+            }
 
-        if Backend.students.length == 0: Text {
-            text: "No students added yet";
-            font-size: 17px;
-            color: Theme.gray;
-        }
+            Hint {
+                text: "Homework, Test and Quiz are always there. Add your own kinds of scores, such as Project or Participation, and give them a weight above.";
+            }
 
-        if Backend.students.length > 0: Rectangle {
-            vertical-stretch: 1;
-            min-height: 132px;
-            background: Theme.grouped-background;
-            clip: true;
+            HorizontalLayout {
+                spacing: 8px;
 
-            ScrollView {
-                VerticalLayout {
-                    padding: 16px;
-                    alignment: start;
+                VCenter {
+                    horizontal-stretch: 1;
+                    category-field := RoundedField {
+                        placeholder: "Category Name";
+                        accepted => {
+                            if !Backend.is-blank(self.text) && Backend.add-category(self.text) {
+                                self.text = "";
+                            }
+                        }
+                    }
+                }
 
-                    Rectangle {
-                        border-radius: 10px;
-                        background: Theme.cell-background;
-
-                        VerticalLayout {
-                            for item[index] in Backend.students: StudentListRow {
-                                item: item;
-                                last: index == Backend.students.length - 1;
-                                revealed: root.revealed-id == item.id;
-                                reveal => {
-                                    root.revealed-id = item.id;
-                                }
-                                cancel => {
-                                    root.revealed-id = "";
-                                }
-                                remove => {
-                                    root.revealed-id = "";
-                                    Backend.delete-student(item.id);
-                                }
+                VCenter {
+                    ProminentButton {
+                        text: "Add";
+                        accessible-label: "Add category";
+                        enabled: !Backend.is-blank(category-field.text);
+                        clicked => {
+                            if Backend.add-category(category-field.text) {
+                                category-field.text = "";
                             }
                         }
                     }
                 }
             }
-        }
 
-        Divider { }
+            NameList {
+                count: Backend.custom-categories.length;
 
-        Text {
-            text: "Assignment Weights";
-            font-size: 22px;
-            color: Theme.label;
-        }
-
-        VerticalLayout {
-            spacing: 10px;
-
-            WeightRow {
-                title: "Test";
-                value <=> Backend.test-weight;
-                changed => {
-                    Backend.weights-changed();
+                for item[index] in Backend.custom-categories: NameRow {
+                    item: item;
+                    rename => {
+                        Backend.rename-category(index);
+                    }
+                    remove => {
+                        Backend.remove-category(index);
+                    }
                 }
             }
 
-            WeightRow {
-                title: "Quiz";
-                value <=> Backend.quiz-weight;
-                changed => {
-                    Backend.weights-changed();
+            Divider { }
+
+            SectionTitle {
+                text: "Subjects";
+            }
+
+            Hint {
+                text: "The usual 20 subjects are always there. Add the ones you teach that aren't.";
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                VCenter {
+                    horizontal-stretch: 1;
+                    subject-field := RoundedField {
+                        placeholder: "Subject Name";
+                        accepted => {
+                            if !Backend.is-blank(self.text) && Backend.add-subject(self.text) {
+                                self.text = "";
+                            }
+                        }
+                    }
+                }
+
+                VCenter {
+                    ProminentButton {
+                        text: "Add";
+                        accessible-label: "Add subject";
+                        enabled: !Backend.is-blank(subject-field.text);
+                        clicked => {
+                            if Backend.add-subject(subject-field.text) {
+                                subject-field.text = "";
+                            }
+                        }
+                    }
                 }
             }
 
-            WeightRow {
-                title: "Homework";
-                value <=> Backend.homework-weight;
-                changed => {
-                    Backend.weights-changed();
+            NameList {
+                count: Backend.custom-subjects.length;
+
+                for item[index] in Backend.custom-subjects: NameRow {
+                    item: item;
+                    rename => {
+                        Backend.rename-subject(index);
+                    }
+                    remove => {
+                        Backend.remove-subject(index);
+                    }
                 }
+            }
+
+            Divider { }
+
+            SectionTitle {
+                text: "Grade Levels";
+            }
+
+            Hint {
+                text: "Grades 1 to 10 are always there. Add Kindergarten or grades 11 to 20 if you need them.";
+            }
+
+            if Backend.addable-level-options.length > 0: HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                VCenter {
+                    width: 150px;
+
+                    MenuPicker {
+                        options: Backend.addable-level-options;
+                        current-index <=> Backend.addable-level-index;
+                    }
+                }
+
+                VCenter {
+                    ProminentButton {
+                        text: "Add";
+                        accessible-label: "Add grade level";
+                        clicked => {
+                            Backend.add-level();
+                        }
+                    }
+                }
+            }
+
+            NameList {
+                count: Backend.extra-levels.length;
+
+                for item[index] in Backend.extra-levels: NameRow {
+                    item: item;
+                    editable: false;
+                    remove => {
+                        Backend.remove-level(index);
+                    }
+                }
+            }
+
+            Divider { }
+
+            SectionTitle {
+                text: "Your Data";
+            }
+
+            HorizontalLayout {
+                spacing: 20px;
+                alignment: start;
+
+                TintedButton {
+                    text: "Backup";
+                    UploadIcon { }
+
+                    clicked => {
+                        Backend.backup();
+                    }
+                }
+
+                ProminentButton {
+                    text: "Restore";
+                    DownloadIcon {
+                        tint: #ffffff;
+                    }
+
+                    clicked => {
+                        Backend.restore();
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: start;
+
+                TintedButton {
+                    text: "Open Data Folder";
+                    clicked => {
+                        Backend.open-data-folder();
+                    }
+                }
+
+                TintedButton {
+                    text: "Export Scores (CSV)";
+                    clicked => {
+                        Backend.export-scores();
+                    }
+                }
+            }
+
+            Hint {
+                text: Backend.data-folder;
+            }
+
+            Hint {
+                text: Backend.backups-summary;
+            }
+
+            HorizontalLayout {
+                alignment: start;
+
+                TintedButton {
+                    text: "Start a New School Year";
+                    tint: Theme.red;
+                    clicked => {
+                        Backend.start-new-year();
+                    }
+                }
+            }
+
+            Hint {
+                text: "Saves a copy of everything first, then clears every score and moves each student up a grade. You can undo it until you quit.";
+            }
+
+            Divider { }
+
+            SectionTitle {
+                text: "About";
             }
 
             Text {
-                text: "Total: " + Math.round(root.total-weight) + "%";
+                text: "GradeBook " + Backend.version;
                 font-size: 17px;
-                font-weight: 700;
-                color: root.total-weight == 100 ? Theme.green : Theme.red;
+                color: Theme.label;
             }
-        }
 
-        Divider { }
+            Hint {
+                text: "Made with Slint. The Inter typeface is used under the SIL Open Font License.";
+            }
 
-        HorizontalLayout {
-            spacing: 20px;
-            alignment: start;
+            Divider { }
 
-            TintedButton {
-                text: "Backup";
-                UploadIcon { }
+            SectionTitle {
+                text: "Updates";
+            }
 
-                clicked => {
-                    Backend.backup();
+            HorizontalLayout {
+                spacing: 10px;
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: "Look for a new version when GradeBook starts";
+                    font-size: 17px;
+                    color: Theme.label;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                }
+
+                VCenter {
+                    ToggleSwitch {
+                        checked <=> Backend.check-updates;
+                        accessible-label: "Look for updates at start";
+                        toggled(on) => {
+                            Backend.check-updates-changed();
+                        }
+                    }
                 }
             }
 
-            ProminentButton {
-                text: "Restore";
-                DownloadIcon {
-                    tint: #ffffff;
+            Hint {
+                text: "GradeBook asks GitHub for the number of the newest release each time it starts. It sends nothing about you or your gradebook, and it never installs anything by itself. When this is off, it only looks when you press Check for Updates.";
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+                alignment: start;
+
+                TintedButton {
+                    text: "Check for Updates";
+                    clicked => {
+                        Backend.check-now();
+                    }
                 }
 
-                clicked => {
-                    Backend.restore();
+                if Backend.update-available: ProminentButton {
+                    text: "Open the Download Page";
+                    clicked => {
+                        Backend.open-release-page();
+                    }
                 }
             }
-        }
 
-        // Shares the leftover height with the list.
-        Rectangle {
-            vertical-stretch: 1;
+            Hint {
+                text: Backend.update-status;
+            }
         }
     }
 }

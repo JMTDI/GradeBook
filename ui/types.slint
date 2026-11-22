@@ -2,8 +2,11 @@ export struct ChipData {
     id: string,
     value: string,
     letter: string,
-    // 0 = homework, 1 = test, 2 = quiz (the order of `GradeType::ALL`)
+    // The position of the score's category in `Backend.category-names`: 0 = homework,
+    // 1 = test, 2 = quiz (the order of `GradeType::ALL`), then the categories that were added.
     kind: int,
+    // The lowest score of its category, which is left out of the average.
+    dropped: bool,
 }
 
 export struct StudentRowData {
@@ -29,4 +32,73 @@ export struct AlertData {
     // Empty for a plain OK alert.
     confirm-label: string,
     destructive: bool,
+}
+
+// The bar that appears after a change, with the one thing to do about it.
+export struct ToastData {
+    visible: bool,
+    message: string,
+    // "Undo", "Redo" or "View".
+    action: string,
+}
+
+// A category in the grading settings.
+export struct CategoryRow {
+    name: string,
+    kind: int,
+    weight: float,
+    drop-lowest: bool,
+}
+
+// A row of one of the lists in the settings (subjects, categories, grade levels).
+export struct NameItem {
+    name: string,
+    detail: string,
+}
+
+// One bar of the grade distribution.
+export struct BarData {
+    label: string,
+    count: int,
+    // 0 to 1, against the longest bar.
+    share: float,
+}
+
+export struct StandingData {
+    name: string,
+    average: string,
+}
+
+// One period of the class average chart.
+export struct TrendPoint {
+    label: string,
+    // "85.3 B", or "" when the period has no scores.
+    text: string,
+    // Where the point is in the chart, 0 to 1 from the left and from the top.
+    x: float,
+    y: float,
+    has-value: bool,
+    current: bool,
+}
+
+export struct InsightsData {
+    // "4 of 5 students have an average", or "No students in this grade".
+    summary: string,
+    class-average: string,
+    highest: string,
+    highest-name: string,
+    lowest: string,
+    lowest-name: string,
+    median: string,
+    bars: [BarData],
+    attention: [StandingData],
+    trend: [TrendPoint],
+}
+
+// A subject of a report card.
+export struct ReportRowData {
+    subject: string,
+    // The six periods, "85.3 B" or "—".
+    cells: [string],
+    average: string,
 }

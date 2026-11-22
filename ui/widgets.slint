@@ -1,0 +1,370 @@
+import { Theme } from "theme.slint";
+import { Backend } from "backend.slint";
+
+// A small button that is only text: the actions beside a student's scores.
+export component SmallButton inherits Rectangle {
+    in property <string> text;
+    // What assistive technology reads, when the text alone isn't enough.
+    in property <string> description;
+    in property <color> tint: Theme.accent;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 26px;
+    border-radius: 6px;
+    background: !root.enabled ? transparent : (touch.pressed ? root.tint.with-alpha(0.22) : (touch.has-hover ? root.tint.with-alpha(0.12) : transparent));
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: root.description != "" ? root.description : root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+
+        Text {
+            text: root.text;
+            font-size: 14px;
+            color: root.enabled ? root.tint : Theme.tertiary-label;
+            vertical-alignment: center;
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A round button with an icon, like the one that switches between light and dark.
+export component RoundButton inherits Rectangle {
+    in property <string> label;
+    // More for assistive technology to read, such as what an undo would take back.
+    in property <string> description;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    // Solid under the tint, so a screen that scrolls beneath the button doesn't show through.
+    background: Theme.background;
+    forward-focus: focus;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-description: root.description;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        if root.enabled {
+            root.clicked();
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius;
+        background: Theme.accent.with-alpha(root.enabled ? (touch.pressed ? 0.28 : (touch.has-hover ? 0.22 : 0.16)) : 0.07);
+    }
+
+    Rectangle {
+        opacity: root.enabled ? 1 : 0.4;
+
+        HorizontalLayout {
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                @children
+            }
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 2px;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// `Toggle`: an on/off switch.
+export component ToggleSwitch inherits Rectangle {
+    in-out property <bool> checked;
+    callback toggled(bool);
+
+    width: 51px;
+    height: 31px;
+    border-radius: 15.5px;
+    background: root.checked ? Theme.green : Theme.fill;
+    forward-focus: focus;
+    accessible-role: switch;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-action-default => {
+        root.toggle();
+    }
+
+    animate background {
+        duration: 150ms;
+    }
+
+    function toggle() {
+        root.checked = !root.checked;
+        root.toggled(root.checked);
+    }
+
+    // The knob gets a ring and a hairline border instead of a shadow, which the software
+    // renderer doesn't draw.
+    Rectangle {
+        x: root.checked ? root.width - self.width - 2px : 2px;
+        y: 2px;
+        width: 27px;
+        height: 27px;
+        border-radius: 13.5px;
+        background: #ffffff;
+        border-width: 1phx;
+        border-color: Theme.thumb-border;
+        animate x {
+            duration: 150ms;
+            easing: ease-in-out;
+        }
+    }
+
+    Rectangle {
+        border-radius: root.border-radius + 3px;
+        x: -3px;
+        y: -3px;
+        width: parent.width + 6px;
+        height: parent.height + 6px;
+        border-width: 2px;
+        border-color: Theme.accent.with-alpha(0.5);
+        visible: focus.has-focus;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.toggle();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+// A text field with several lines, for pasting a list. It scrolls to keep the caret in view.
+export component RoundedArea inherits Rectangle {
+    in property <string> placeholder;
+    in-out property <string> text <=> input.text;
+    out property <bool> has-focus: input.has-focus;
+    callback edited(string);
+
+    property <length> margin: 8px;
+    property <length> line: 24px;
+
+    border-radius: 7px;
+    background: Theme.field-background;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.field-border;
+    clip: true;
+    forward-focus: input;
+    accessible-role: text-input;
+    accessible-label: root.placeholder;
+    accessible-placeholder-text: root.placeholder;
+    accessible-value <=> input.text;
+    accessible-action-set-value(value) => {
+        input.text = value;
+        root.edited(value);
+    }
+
+    // Moves the keyboard focus into the field.
+    public function focus-input() {
+        input.focus();
+    }
+
+    Text {
+        x: root.margin;
+        y: root.margin;
+        width: parent.width - 2 * root.margin;
+        wrap: word-wrap;
+        font-size: 17px;
+        color: Theme.tertiary-label;
+        text: (input.text == "" && input.preedit-text == "") ? root.placeholder : "";
+        accessible-role: none;
+    }
+
+    scroller := Flickable {
+        content-height: max(self.height, input.preferred-height + 2 * root.margin);
+
+        input := TextInput {
+            x: root.margin;
+            y: root.margin;
+            width: parent.width - 2 * root.margin;
+            height: max(scroller.height - 2 * root.margin, self.preferred-height);
+            single-line: false;
+            wrap: word-wrap;
+            font-size: 17px;
+            color: Theme.label;
+            selection-background-color: Theme.accent.with-alpha(0.35);
+            selection-foreground-color: Theme.label;
+            accessible-role: none;
+
+            // Keep the caret visible when there are more lines than fit.
+            cursor-position-changed(pos) => {
+                let top = pos.y + root.margin;
+                if top + scroller.content-y < 0px {
+                    scroller.content-y = -top;
+                } else if top + root.line + scroller.content-y > scroller.height {
+                    scroller.content-y = scroller.height - top - root.line;
+                }
+            }
+            edited => {
+                root.edited(self.text);
+            }
+        }
+    }
+}
+
+// The frame of a dialog: the dimmed window behind it, and a card with a title. The dialog's
+// own controls are the children. Keyboard focus stays inside while it is open: tabbing past
+// the last control returns to the first (the two empty scopes at either end catch it), and
+// Escape cancels.
+export component ModalFrame inherits Rectangle {
+    in property <string> title;
+    in property <length> card-width: 420px;
+    callback cancel();
+    // The dialog says which control comes first and which last.
+    callback focus-first();
+    callback focus-last();
+
+    // An alert on top of the dialog takes the focus; when it closes, the dialog gets it back.
+    property <bool> alert-open: Backend.alert.visible;
+    changed alert-open => {
+        if !root.alert-open {
+            root.focus-first();
+        }
+    }
+
+    background: Theme.scrim;
+    forward-focus: scope;
+
+    init => {
+        root.focus-first();
+    }
+
+    // Swallow clicks so nothing behind the dialog reacts.
+    TouchArea { }
+
+    scope := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+
+        card := Rectangle {
+            width: min(root.card-width, parent.width - 32px);
+            height: min(content.preferred-height, parent.height - 32px);
+            x: (parent.width - self.width) / 2;
+            y: max(16px, (parent.height - self.height) / 3);
+            border-radius: 14px;
+            background: Theme.menu-background;
+            border-width: 1phx;
+            border-color: Theme.separator;
+            accessible-role: groupbox;
+            accessible-label: root.title;
+
+            start := FocusScope {
+                width: 0px;
+                height: 0px;
+                focus-gained(reason) => {
+                    root.focus-last();
+                }
+            }
+
+            content := VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+
+                Text {
+                    text: root.title;
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: Theme.label;
+                    wrap: word-wrap;
+                }
+
+                @children
+            }
+
+            end := FocusScope {
+                width: 0px;
+                height: 0px;
+                focus-gained(reason) => {
+                    root.focus-first();
+                }
+            }
+        }
+    }
+}
