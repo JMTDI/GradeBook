@@ -11,7 +11,7 @@ Weighted averages, letter grades, insights, report cards and automatic backups, 
 [![Build](https://github.com/JMTDI/GradeBook/actions/workflows/desktop.yml/badge.svg)](https://github.com/JMTDI/GradeBook/actions/workflows/desktop.yml)
 ![Platforms: Windows, macOS and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-5856D6)
 ![Rust 1.92 or newer](https://img.shields.io/badge/Rust-1.92%2B-DEA584?logo=rust&logoColor=white)
-[![Downloads](https://img.shields.io/github/downloads/JMTDI/GradeBook/total?logo=github)](https://github.com/JMTDI/GradeBook/releases)
+![GitHub Downloads (latest release)](https://img.shields.io/github/downloads/JMTDI/GradeBook/latest/total)
 
 [![Download for Windows](https://img.shields.io/badge/Download%20for-Windows-0078D6?style=for-the-badge)](https://github.com/JMTDI/GradeBook/releases/latest)
 [![Download for macOS](https://img.shields.io/badge/Download%20for-macOS-1D1D1F?style=for-the-badge)](https://github.com/JMTDI/GradeBook/releases/latest)
